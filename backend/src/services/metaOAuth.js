@@ -24,7 +24,6 @@ export const buildMetaOAuthAuthorizeUrl = ({ businessId }) => {
   const scope = [
     "whatsapp_business_management",
     "whatsapp_business_messaging",
-    "business_management",
   ].join(",");
 
   const params = new URLSearchParams({
