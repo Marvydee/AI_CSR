@@ -5,6 +5,7 @@ const META_API_VERSION = "v22.0";
 const META_AUTH_BASE_URL = "https://www.facebook.com";
 const META_GRAPH_URL = `https://graph.instagram.com/${META_API_VERSION}`;
 const META_BUSINESS_URL = `https://graph.facebook.com/${META_API_VERSION}`;
+const META_OAUTH_TOKEN_URL = `https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`;
 
 const generateStateToken = () => {
   return crypto.randomBytes(32).toString("hex");
@@ -52,17 +53,14 @@ export const exchangeOAuthCodeForToken = async ({ code }) => {
   }
 
   try {
-    const tokenResponse = await axios.get(
-      `${META_AUTH_BASE_URL}/v22.0/oauth/access_token`,
-      {
-        params: {
-          client_id: appId,
-          client_secret: appSecret,
-          redirect_uri: redirectUri,
-          code,
-        },
+    const tokenResponse = await axios.get(META_OAUTH_TOKEN_URL, {
+      params: {
+        client_id: appId,
+        client_secret: appSecret,
+        redirect_uri: redirectUri,
+        code,
       },
-    );
+    });
 
     const { access_token: accessToken, user_id: userId } = tokenResponse.data;
 
