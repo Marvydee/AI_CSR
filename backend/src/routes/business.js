@@ -1149,7 +1149,52 @@ router.post(
         });
       }
 
-      const { accessToken } = await exchangeOAuthCodeForToken({ code });
+      let accessToken;
+      try {
+        ({ accessToken } = await exchangeOAuthCodeForToken({ code }));
+      } catch (exchangeError) {
+        const message = String(exchangeError.message || "").toLowerCase();
+        const alreadyUsedOrExpiredCode =
+          message.includes("already") ||
+          message.includes("used") ||
+          message.includes("expired") ||
+          message.includes("invalid verification code") ||
+          message.includes("code has expired");
+
+        // In dev/StrictMode callback replays, code can be consumed already.
+        // If the business is already connected, surface success instead of hard failure.
+        if (
+          alreadyUsedOrExpiredCode &&
+          business?.whatsappPhoneNumberId &&
+          !String(business.whatsappPhoneNumberId).startsWith("pending_")
+        ) {
+          const hydratedBusiness = await prisma.business.findUnique({
+            where: { id: req.params.businessId },
+            select: {
+              id: true,
+              name: true,
+              whatsappPhoneNumberId: true,
+              whatsappBusinessNumber: true,
+              aiTrainingData: true,
+            },
+          });
+
+          const onboardingData = getOnboardingData(hydratedBusiness);
+
+          return res.status(200).json({
+            success: true,
+            recovered: true,
+            business: {
+              id: hydratedBusiness.id,
+              whatsappPhoneNumberId: hydratedBusiness.whatsappPhoneNumberId,
+              whatsappBusinessNumber: hydratedBusiness.whatsappBusinessNumber,
+            },
+            onboarding: onboardingData,
+          });
+        }
+
+        throw exchangeError;
+      }
 
       const { phoneNumberId, displayPhoneNumber, whatsappBusinessAccountId } =
         await getWhatsAppBusinessAccountAndPhoneNumber({ accessToken });
