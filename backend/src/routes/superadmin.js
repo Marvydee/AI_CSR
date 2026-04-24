@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import { prisma } from "../lib/prisma.js";
 import { authenticateJWT, authenticateSuperAdmin } from "../middleware/auth.js";
 import { getOnboardingData } from "../services/onboarding.js";
@@ -6,6 +7,79 @@ import { getOnboardingData } from "../services/onboarding.js";
 const router = express.Router();
 
 router.use(authenticateJWT, authenticateSuperAdmin);
+
+const buildRegistrationCode = () => {
+  const first = crypto.randomBytes(3).toString("hex").toUpperCase();
+  const second = crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `AICSR-${first}-${second}`;
+};
+
+router.post("/invite-codes/generate", async (req, res) => {
+  const requestedCount = Number(req.body?.count ?? 1);
+  const count = Number.isInteger(requestedCount)
+    ? Math.min(Math.max(requestedCount, 1), 20)
+    : 1;
+
+  const generatedCodes = [];
+
+  while (generatedCodes.length < count) {
+    const code = buildRegistrationCode();
+
+    try {
+      const created = await prisma.registrationInviteCode.create({
+        data: {
+          code,
+          createdBySuperAdminId: req.user.id,
+        },
+        select: {
+          id: true,
+          code: true,
+          usedAt: true,
+          usedByAdminEmail: true,
+          createdAt: true,
+        },
+      });
+      generatedCodes.push(created);
+    } catch (error) {
+      if (error.code !== "P2002") {
+        throw error;
+      }
+    }
+  }
+
+  return res.status(201).json({ codes: generatedCodes });
+});
+
+router.get("/invite-codes", async (_req, res) => {
+  const codes = await prisma.registrationInviteCode.findMany({
+    select: {
+      id: true,
+      code: true,
+      usedAt: true,
+      usedByAdminEmail: true,
+      usedByBusinessId: true,
+      createdAt: true,
+      createdBySuperAdmin: {
+        select: {
+          email: true,
+          name: true,
+        },
+      },
+      usedByBusiness: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 500,
+  });
+
+  return res.status(200).json(codes);
+});
 
 router.get("/tenants", async (_req, res) => {
   const businesses = await prisma.business.findMany({

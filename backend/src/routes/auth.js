@@ -58,6 +58,20 @@ router.post(
         });
       }
 
+      if (error.message === "INVALID_INVITE_CODE") {
+        return res.status(403).json({
+          error:
+            "Invalid access code. Contact support to get a valid registration code.",
+        });
+      }
+
+      if (error.message === "INVITE_CODE_ALREADY_USED") {
+        return res.status(403).json({
+          error:
+            "This access code has already been used. Request a new registration code.",
+        });
+      }
+
       if (error.message === "AUTH_TIMEOUT") {
         return res.status(503).json({
           error:

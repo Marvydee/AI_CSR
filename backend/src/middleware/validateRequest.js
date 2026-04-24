@@ -46,6 +46,7 @@ const signupSchema = Joi.object({
     .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/)
     .required(),
   businessName: Joi.string().trim().min(2).max(120).required(),
+  inviteCode: Joi.string().trim().min(8).max(64).required(),
 });
 
 const accountUpdateSchema = Joi.object({

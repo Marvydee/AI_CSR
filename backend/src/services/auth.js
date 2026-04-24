@@ -66,6 +66,7 @@ export const signupBusinessAdmin = async ({
   email,
   password,
   businessName,
+  inviteCode,
 }) => {
   if (dbCredentialsInvalid) {
     throw new Error("DB_AUTH_INVALID");
@@ -76,6 +77,9 @@ export const signupBusinessAdmin = async ({
     .toLowerCase();
   const normalizedName = String(fullName || "").trim();
   const normalizedBusinessName = String(businessName || "").trim();
+  const normalizedInviteCode = String(inviteCode || "")
+    .trim()
+    .toUpperCase();
   const hashedPassword = hashPassword(password);
 
   const existingAdmin = await prisma.businessAdmin.findFirst({
@@ -99,8 +103,24 @@ export const signupBusinessAdmin = async ({
   const businessId = `biz_${crypto.randomUUID().replace(/-/g, "")}`;
   const pendingPhoneNumberId = createPendingWhatsAppPhoneNumberId();
 
-  const [business, admin] = await prisma.$transaction([
-    prisma.business.create({
+  const { business, admin } = await prisma.$transaction(async (tx) => {
+    const registrationCode = await tx.registrationInviteCode.findUnique({
+      where: { code: normalizedInviteCode },
+      select: {
+        id: true,
+        usedAt: true,
+      },
+    });
+
+    if (!registrationCode) {
+      throw new Error("INVALID_INVITE_CODE");
+    }
+
+    if (registrationCode.usedAt) {
+      throw new Error("INVITE_CODE_ALREADY_USED");
+    }
+
+    const createdBusiness = await tx.business.create({
       data: {
         id: businessId,
         name: normalizedBusinessName,
@@ -110,16 +130,38 @@ export const signupBusinessAdmin = async ({
         isPaused: false,
         aiTrainingData: buildInitialOnboardingData(),
       },
-    }),
-    prisma.businessAdmin.create({
+    });
+
+    const createdAdmin = await tx.businessAdmin.create({
       data: {
         businessId,
         email: normalizedEmail,
         passwordHash: hashedPassword,
         name: normalizedName,
       },
-    }),
-  ]);
+    });
+
+    const consumeResult = await tx.registrationInviteCode.updateMany({
+      where: {
+        id: registrationCode.id,
+        usedAt: null,
+      },
+      data: {
+        usedByBusinessId: createdBusiness.id,
+        usedByAdminEmail: normalizedEmail,
+        usedAt: new Date(),
+      },
+    });
+
+    if (consumeResult.count !== 1) {
+      throw new Error("INVITE_CODE_ALREADY_USED");
+    }
+
+    return {
+      business: createdBusiness,
+      admin: createdAdmin,
+    };
+  });
 
   const accessToken = generateAccessToken({
     id: admin.id,
