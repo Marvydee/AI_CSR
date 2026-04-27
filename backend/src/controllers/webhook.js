@@ -19,6 +19,23 @@ import {
 } from "../services/whatsapp.js";
 import { ensureDatabaseTimestampsAreValid } from "../utils/repairTimestamps.js";
 
+const isPlaceholderCustomerName = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return true;
+
+  return new Set([
+    "customer",
+    "john doe",
+    "jane doe",
+    "test",
+    "test user",
+    "example",
+    "sample",
+  ]).has(normalized);
+};
+
 const DEFAULT_CUSTOMER_FALLBACK_REPLY =
   "Thanks for your message. We’re unable to respond fully right now, but we’ll get back to you shortly.";
 
@@ -60,7 +77,11 @@ const parseIncomingMessages = (payload) => {
           all.push({
             text,
             customerWaId: msg.from,
-            customerName: matchedContact?.profile?.name || null,
+            customerName: isPlaceholderCustomerName(
+              matchedContact?.profile?.name,
+            )
+              ? null
+              : matchedContact?.profile?.name || null,
             phoneNumberId,
             displayPhoneNumber,
             metaMessageId: msg.id,
@@ -396,7 +417,11 @@ const handleSingleMessage = async (incoming) => {
     }
 
     const resolvedCustomerName =
-      customer.name || incoming.customerName || incoming.customerWaId;
+      customer.name ||
+      (isPlaceholderCustomerName(incoming.customerName)
+        ? null
+        : incoming.customerName) ||
+      incoming.customerWaId;
     const promptBusinessContext = {
       ...augmentedBusinessContext,
       customerName: resolvedCustomerName,

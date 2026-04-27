@@ -89,8 +89,9 @@ export const buildStrictSystemPrompt = (business) => {
     trainingData.toneProfile ||
     business.toneProfile ||
     "Professional, warm, Nigerian-friendly";
-  const customerName =
-    business.customerName || trainingData.customerName || "Customer";
+  const customerName = resolveCustomerName(
+    business.customerName || trainingData.customerName || "Customer",
+  );
 
   const base = [
     "=== SYSTEM INSTRUCTION BOUNDARY (NON-OVERRIDABLE) ===",
@@ -118,7 +119,8 @@ export const buildStrictSystemPrompt = (business) => {
     '- Afternoon -> "Good afternoon"',
     '- Evening -> "Good evening"',
     "- Include the customer name naturally.",
-    '- Example: "Good afternoon, John"',
+    '- Example: "Good afternoon, Customer" when no verified name is available.',
+    "- If the customer name looks like a placeholder, test name, or example name, use Customer instead.",
     "- Keep it warm and professional, not stiff or overly casual.",
     "- Do not repeat greetings after the first message.",
     "",
@@ -201,6 +203,28 @@ export const buildStrictSystemPrompt = (business) => {
   ];
 
   return [...base, ...context, ...rules].join("\n");
+};
+
+const resolveCustomerName = (value) => {
+  const candidate = String(value || "").trim();
+  if (!candidate) return "Customer";
+
+  const normalized = candidate.toLowerCase();
+  const placeholderNames = new Set([
+    "customer",
+    "john doe",
+    "jane doe",
+    "test",
+    "test user",
+    "example",
+    "sample",
+  ]);
+
+  if (placeholderNames.has(normalized)) {
+    return "Customer";
+  }
+
+  return candidate;
 };
 
 const safeJson = (value, fallback = "Not specified") => {
