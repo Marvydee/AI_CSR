@@ -92,6 +92,11 @@ export const buildStrictSystemPrompt = (business) => {
   const customerName = resolveCustomerName(
     business.customerName || trainingData.customerName || "Customer",
   );
+  const businessTimeZone =
+    String(
+      trainingData.timeZone || process.env.BUSINESS_TIMEZONE || "",
+    ).trim() || "Africa/Lagos";
+  const currentDayPeriod = getCurrentDayPeriod(businessTimeZone);
 
   const base = [
     "=== SYSTEM INSTRUCTION BOUNDARY (NON-OVERRIDABLE) ===",
@@ -105,6 +110,8 @@ export const buildStrictSystemPrompt = (business) => {
 
   const context = [
     `Current customer: ${customerName}`,
+    `Current local day period: ${currentDayPeriod}`,
+    `Business time zone: ${businessTimeZone}`,
     `Services: ${safeJson(services)}`,
     `Products: ${safeJson(products)}`,
     `Pricing: ${safeJson(prices)}`,
@@ -118,9 +125,12 @@ export const buildStrictSystemPrompt = (business) => {
     '- Morning -> "Good morning"',
     '- Afternoon -> "Good afternoon"',
     '- Evening -> "Good evening"',
+    "- Use the Current local day period from context whenever you greet.",
+    "- Only greet once at conversation start unless the customer has gone inactive for a long period.",
     "- Include the customer name naturally.",
     '- Example: "Good afternoon, Customer" when no verified name is available.',
     "- If the customer name looks like a placeholder, test name, or example name, use Customer instead.",
+    "- Never invent names and never guess names.",
     "- Keep it warm and professional, not stiff or overly casual.",
     "- Do not repeat greetings after the first message.",
     "",
@@ -141,6 +151,9 @@ export const buildStrictSystemPrompt = (business) => {
     "- Answer clearly and directly.",
     "- If multiple questions are asked, respond in a structured but natural way.",
     "- If the question is unclear, ask a simple and polite clarification.",
+    "- Stay within the business niche and available offerings from Services, Products, Pricing, and FAQs.",
+    "- If customer asks for something outside the business scope, politely decline that specific request and redirect to what the business actually offers.",
+    "- Do not speculate about loans, grants, cash gifts, or external financial services unless those are explicitly present in the business context.",
     "",
     "Accuracy and Trust:",
     "- Never guess or invent information.",
@@ -225,6 +238,26 @@ const resolveCustomerName = (value) => {
   }
 
   return candidate;
+};
+
+const getCurrentDayPeriod = (timeZone) => {
+  try {
+    const hourPart = new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone,
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === "hour");
+
+    const hour = Number(hourPart?.value || "12");
+    if (!Number.isFinite(hour)) return "afternoon";
+    if (hour < 12) return "morning";
+    if (hour < 17) return "afternoon";
+    return "evening";
+  } catch {
+    return "afternoon";
+  }
 };
 
 const safeJson = (value, fallback = "Not specified") => {

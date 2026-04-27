@@ -36,6 +36,148 @@ const isPlaceholderCustomerName = (value) => {
   ]).has(normalized);
 };
 
+const resolveKnownCustomerName = (value) => {
+  const candidate = String(value || "").trim();
+  if (!candidate) return null;
+  if (isPlaceholderCustomerName(candidate)) return null;
+  if (/\d{5,}/.test(candidate)) return null;
+  return candidate;
+};
+
+const normalizeExtractedName = (value) => {
+  const normalized = String(value || "")
+    .replace(/[.,!?;:()\[\]{}"`~@#$%^&*_+=\\/<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) return null;
+
+  const words = normalized
+    .split(" ")
+    .map((word) => word.trim())
+    .filter(Boolean);
+
+  if (words.length === 0 || words.length > 3) return null;
+
+  const invalidLeadWords = new Set([
+    "looking",
+    "interested",
+    "trying",
+    "need",
+    "want",
+    "sorry",
+    "ready",
+    "here",
+    "there",
+    "available",
+    "okay",
+    "ok",
+    "hello",
+    "hi",
+  ]);
+
+  if (invalidLeadWords.has(words[0].toLowerCase())) {
+    return null;
+  }
+
+  const cleaned = words
+    .map((word) => word.replace(/[^a-zA-Z'-]/g, ""))
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  if (!cleaned) return null;
+  if (cleaned.length < 2 || cleaned.length > 40) return null;
+  return cleaned;
+};
+
+const extractCustomerNameFromMessage = (text) => {
+  const input = String(text || "").trim();
+  if (!input) return null;
+
+  const patterns = [
+    /\bmy\s+name\s+is\s+([a-z][a-z\s'\-]{1,40})\b/i,
+    /\b(?:i\s+am|i['’]m)\s+([a-z][a-z\s'\-]{1,40})\b/i,
+    /\bcall\s+me\s+([a-z][a-z\s'\-]{1,40})\b/i,
+    /\bthis\s+is\s+([a-z][a-z\s'\-]{1,40})\b/i,
+    /\bna\s+([a-z][a-z\s'\-]{1,40})\s+be\s+my\s+name\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = input.match(pattern);
+    if (!match?.[1]) continue;
+
+    const cleaned = normalizeExtractedName(match[1]);
+    const resolved = resolveKnownCustomerName(cleaned);
+    if (resolved) return resolved;
+  }
+
+  return null;
+};
+
+const getDayPeriod = (timeZone) => {
+  try {
+    const hourPart = new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone,
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === "hour");
+
+    const hour = Number(hourPart?.value || "12");
+    if (!Number.isFinite(hour)) return "afternoon";
+    if (hour < 12) return "morning";
+    if (hour < 17) return "afternoon";
+    return "evening";
+  } catch {
+    return "afternoon";
+  }
+};
+
+const enforceReplyQuality = ({
+  reply,
+  customerName,
+  isFirstOutbound,
+  timeZone,
+}) => {
+  let normalized = String(reply || "").trim();
+  if (!normalized) return normalized;
+
+  const dayPeriod = getDayPeriod(timeZone || "Africa/Lagos");
+
+  normalized = normalized.replace(
+    /\bgood\s+(morning|afternoon|evening)\b/i,
+    `Good ${dayPeriod}`,
+  );
+
+  if (!isFirstOutbound) {
+    normalized = normalized.replace(
+      /^\s*good\s+(morning|afternoon|evening)\b[^.!?]*[.!?]?\s*/i,
+      "",
+    );
+  }
+
+  if (!customerName) {
+    normalized = normalized.replace(
+      /\b(Good\s+(?:morning|afternoon|evening),\s*)([A-Z][a-z]+)\b/,
+      "$1Customer",
+    );
+
+    normalized = normalized.replace(
+      /\b(john\s+doe|john|jane\s+doe|jane)\b/gi,
+      "Customer",
+    );
+  } else {
+    normalized = normalized.replace(
+      /\b(john\s+doe|john|jane\s+doe|jane)\b/gi,
+      customerName,
+    );
+  }
+
+  return normalized.trim();
+};
+
 const DEFAULT_CUSTOMER_FALLBACK_REPLY =
   "Thanks for your message. We’re unable to respond fully right now, but we’ll get back to you shortly.";
 
@@ -97,7 +239,7 @@ const parseIncomingMessages = (payload) => {
 const getOrCreateCustomer = async ({ businessId, waId, name }) => {
   return prisma.customer.upsert({
     where: { businessId_waId: { businessId, waId } },
-    update: { name },
+    update: name ? { name } : {},
     create: { businessId, waId, name },
   });
 };
@@ -310,15 +452,39 @@ const handleSingleMessage = async (incoming) => {
       return;
     }
 
+    const inferredNameFromMessage = extractCustomerNameFromMessage(
+      guardrailCheck.sanitizedMessage,
+    );
+    const preferredIncomingName =
+      resolveKnownCustomerName(incoming.customerName) || inferredNameFromMessage;
+
     const customer = await getOrCreateCustomer({
       businessId: business.id,
       waId: incoming.customerWaId,
-      name: incoming.customerName,
+      name: preferredIncomingName,
     });
+
+    const customerDisplayName =
+      resolveKnownCustomerName(customer.name) ||
+      preferredIncomingName ||
+      incoming.customerWaId;
 
     const conversation = await getOrCreateConversation({
       businessId: business.id,
       customerId: customer.id,
+    });
+
+    const previousMessages = await prisma.message.findMany({
+      where: { conversationId: conversation.id },
+      select: {
+        direction: true,
+        body: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 12,
     });
 
     await prisma.message.create({
@@ -341,7 +507,7 @@ const handleSingleMessage = async (incoming) => {
           phoneNumberId: incoming.phoneNumberId,
           ownerEmail: business.email,
           ownerWhatsAppNumber: business.whatsappBusinessNumber,
-          customerName: customer.name || incoming.customerWaId,
+          customerName: customerDisplayName,
           reason: "Customer asked for human/boss",
         });
       } catch (error) {
@@ -379,6 +545,13 @@ const handleSingleMessage = async (incoming) => {
       },
     });
 
+    const existingOutboundCount = await prisma.message.count({
+      where: {
+        conversationId: conversation.id,
+        direction: MessageDirection.OUTBOUND,
+      },
+    });
+
     const toggleKey = inferToggleType({
       text: guardrailCheck.sanitizedMessage,
       isFirstCustomerMessage: existingInboundCount === 1,
@@ -398,7 +571,7 @@ const handleSingleMessage = async (incoming) => {
           phoneNumberId: incoming.phoneNumberId,
           ownerEmail: business.email,
           ownerWhatsAppNumber: business.whatsappBusinessNumber,
-          customerName: customer.name || incoming.customerWaId,
+          customerName: customerDisplayName,
           reason: `${toggleKey} is HUMAN_ONLY`,
         });
       } catch (error) {
@@ -417,22 +590,33 @@ const handleSingleMessage = async (incoming) => {
     }
 
     const resolvedCustomerName =
-      customer.name ||
-      (isPlaceholderCustomerName(incoming.customerName)
-        ? null
-        : incoming.customerName) ||
-      incoming.customerWaId;
+      resolveKnownCustomerName(customer.name) ||
+      preferredIncomingName ||
+      null;
     const promptBusinessContext = {
       ...augmentedBusinessContext,
-      customerName: resolvedCustomerName,
+      customerName: resolvedCustomerName || "Customer",
     };
 
-    const systemPrompt =
-      business.customSystemPrompt ||
-      buildStrictSystemPrompt(promptBusinessContext);
-    const aiReply = await generateReply({
+    const strictPrompt = buildStrictSystemPrompt(promptBusinessContext);
+    const systemPrompt = business.customSystemPrompt
+      ? `${strictPrompt}\n\n=== BUSINESS CUSTOM INSTRUCTIONS ===\n${business.customSystemPrompt}`
+      : strictPrompt;
+
+    const aiReplyRaw = await generateReply({
       systemPrompt,
       customerMessage: guardrailCheck.sanitizedMessage,
+      conversationHistory: [...previousMessages].reverse(),
+    });
+
+    const aiReply = enforceReplyQuality({
+      reply: aiReplyRaw,
+      customerName: resolvedCustomerName,
+      isFirstOutbound: existingOutboundCount === 0,
+      timeZone:
+        augmentedBusinessContext?.aiTrainingData?.timeZone ||
+        process.env.BUSINESS_TIMEZONE ||
+        "Africa/Lagos",
     });
 
     if (shouldDraftForApproval(toggleMode)) {
@@ -450,7 +634,7 @@ const handleSingleMessage = async (incoming) => {
           phoneNumberId: incoming.phoneNumberId,
           ownerEmail: business.email,
           ownerWhatsAppNumber: business.whatsappBusinessNumber,
-          customerName: customer.name || incoming.customerWaId,
+          customerName: customerDisplayName,
           draftReply: aiReply,
         });
       } catch (error) {

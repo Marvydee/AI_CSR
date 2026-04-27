@@ -37,14 +37,40 @@ const isRetryableGroqError = (error) => {
   );
 };
 
-export const generateReply = async ({ systemPrompt, customerMessage }) => {
+export const generateReply = async ({
+  systemPrompt,
+  customerMessage,
+  conversationHistory = [],
+}) => {
   try {
+    const historyMessages = Array.isArray(conversationHistory)
+      ? conversationHistory
+          .map((item) => {
+            const direction = String(item?.direction || "").toUpperCase();
+            const body = String(item?.body || "").trim();
+            if (!body) return null;
+
+            if (direction === "INBOUND") {
+              return { role: "user", content: body };
+            }
+
+            if (direction === "OUTBOUND" || direction === "DRAFT_TO_APPROVE") {
+              return { role: "assistant", content: body };
+            }
+
+            return null;
+          })
+          .filter(Boolean)
+          .slice(-10)
+      : [];
+
     const payload = {
       model: "llama-3.3-70b-versatile",
-      temperature: 0.4,
+      temperature: 0.25,
       max_tokens: 280,
       messages: [
         { role: "system", content: systemPrompt },
+        ...historyMessages,
         { role: "user", content: customerMessage },
       ],
     };
