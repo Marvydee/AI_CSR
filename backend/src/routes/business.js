@@ -617,6 +617,37 @@ router.put("/toggles/:key", async (req, res) => {
   return res.status(200).json(updated);
 });
 
+router.get("/conversations", async (req, res) => {
+  const businessId = resolveBusinessIdFromRequest(req);
+  if (!businessId) {
+    return res.status(400).json({ error: "businessId is required" });
+  }
+
+  const conversations = await prisma.conversation.findMany({
+    where: { businessId },
+    include: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          waId: true,
+        },
+      },
+      messages: {
+        select: {
+          id: true,
+        },
+      },
+    },
+    orderBy: {
+      lastMessageAt: "desc",
+    },
+    take: 200,
+  });
+
+  return res.status(200).json(conversations);
+});
+
 router.get("/handoffs", async (req, res) => {
   const businessId = resolveBusinessIdFromRequest(req);
   if (!businessId) {
