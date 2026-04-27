@@ -636,6 +636,19 @@ router.get("/conversations", async (req, res) => {
       messages: {
         select: {
           id: true,
+          direction: true,
+          body: true,
+          createdAt: true,
+          needsApproval: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 30,
+      },
+      _count: {
+        select: {
+          messages: true,
         },
       },
     },
