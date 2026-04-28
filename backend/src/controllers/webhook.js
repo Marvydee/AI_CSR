@@ -7,11 +7,21 @@ import {
   shouldForceHuman,
 } from "../config/toggles.js";
 import {
-  buildStrictSystemPrompt,
   detectHumanRequest,
-  createGuardRail,
+  detectPromptInjection,
+  detectSensitiveIntent,
+  sanitizeInput,
 } from "../services/guardrails.js";
 import { generateReply } from "../services/ai_engine.js";
+import {
+  buildDynamicSystemPrompt,
+  buildIrrelevantResponse,
+  classifyIntent,
+  findFaqMatch,
+  getTenantUserMemory,
+  loadBusinessConfig,
+  updateTenantUserMemory,
+} from "../services/tenantAI.js";
 import {
   sendOwnerDraftNotification,
   sendOwnerHandoffNotification,
@@ -59,35 +69,13 @@ const normalizeExtractedName = (value) => {
 
   if (words.length === 0 || words.length > 3) return null;
 
-  const invalidLeadWords = new Set([
-    "looking",
-    "interested",
-    "trying",
-    "need",
-    "want",
-    "sorry",
-    "ready",
-    "here",
-    "there",
-    "available",
-    "okay",
-    "ok",
-    "hello",
-    "hi",
-  ]);
-
-  if (invalidLeadWords.has(words[0].toLowerCase())) {
-    return null;
-  }
-
   const cleaned = words
     .map((word) => word.replace(/[^a-zA-Z'-]/g, ""))
     .filter(Boolean)
     .join(" ")
     .trim();
 
-  if (!cleaned) return null;
-  if (cleaned.length < 2 || cleaned.length > 40) return null;
+  if (!cleaned || cleaned.length < 2 || cleaned.length > 40) return null;
   return cleaned;
 };
 
@@ -240,7 +228,7 @@ const getOrCreateCustomer = async ({ businessId, waId, name }) => {
   return prisma.customer.upsert({
     where: { businessId_waId: { businessId, waId } },
     update: name ? { name } : {},
-    create: { businessId, waId, name },
+    create: { businessId, waId, name: name || null },
   });
 };
 
@@ -421,27 +409,23 @@ const handleSingleMessage = async (incoming) => {
       take: 80,
     });
 
-    const augmentedBusinessContext = {
-      ...business,
-      aiTrainingData: {
-        ...(business.aiTrainingData &&
-        typeof business.aiTrainingData === "object"
-          ? business.aiTrainingData
-          : {}),
-        products: activeProducts,
-      },
-    };
-
-    const guardrailCheck = await createGuardRail({
-      userMessage: incoming.text,
-      businessContext: augmentedBusinessContext,
+    const businessConfig = loadBusinessConfig({
+      business,
+      activeProducts,
     });
 
-    if (!guardrailCheck.shouldProceed || guardrailCheck.isInjectionAttempt) {
+    const sanitizedMessage = sanitizeInput(incoming.text);
+    if (!sanitizedMessage) {
+      await sendCustomerFallbackReply(incoming);
+      return;
+    }
+
+    const isInjectionAttempt = detectPromptInjection(sanitizedMessage);
+    if (isInjectionAttempt) {
       console.warn("[Webhook] Message blocked by guardrails", {
         businessId: business.id,
         customerWaId: incoming.customerWaId,
-        warnings: guardrailCheck.warnings,
+        warnings: ["Potential prompt injection detected"],
       });
 
       await sendCustomerFallbackReply(
@@ -452,11 +436,11 @@ const handleSingleMessage = async (incoming) => {
       return;
     }
 
-    const inferredNameFromMessage = extractCustomerNameFromMessage(
-      guardrailCheck.sanitizedMessage,
-    );
+    const inferredNameFromMessage =
+      extractCustomerNameFromMessage(sanitizedMessage);
     const preferredIncomingName =
-      resolveKnownCustomerName(incoming.customerName) || inferredNameFromMessage;
+      resolveKnownCustomerName(incoming.customerName) ||
+      inferredNameFromMessage;
 
     const customer = await getOrCreateCustomer({
       businessId: business.id,
@@ -491,10 +475,85 @@ const handleSingleMessage = async (incoming) => {
       data: {
         conversationId: conversation.id,
         direction: MessageDirection.INBOUND,
-        body: guardrailCheck.sanitizedMessage,
+        body: sanitizedMessage,
         metaMessageId: incoming.metaMessageId,
       },
     });
+
+    const intentResult = classifyIntent({
+      message: sanitizedMessage,
+      businessConfig,
+    });
+
+    if (!intentResult.isRelevant) {
+      const irrelevantReply = buildIrrelevantResponse(businessConfig);
+
+      await sendWhatsAppText({
+        phoneNumberId: incoming.phoneNumberId,
+        to: incoming.customerWaId,
+        text: irrelevantReply,
+      });
+
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: MessageDirection.OUTBOUND,
+          body: irrelevantReply,
+        },
+      });
+
+      updateTenantUserMemory({
+        tenantId: businessConfig.id,
+        userId: customer.id,
+        patch: {
+          intent: intentResult.intent,
+          collectedData: {
+            isRelevant: false,
+            lastUserMessage: sanitizedMessage,
+            matchedServices: intentResult.entities?.matchedServices || [],
+          },
+          stage: "irrelevant",
+        },
+      });
+
+      return;
+    }
+
+    const faqMatch = findFaqMatch({
+      message: sanitizedMessage,
+      faqs: businessConfig.faqs,
+    });
+
+    if (faqMatch) {
+      await sendWhatsAppText({
+        phoneNumberId: incoming.phoneNumberId,
+        to: incoming.customerWaId,
+        text: faqMatch.answer,
+      });
+
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: MessageDirection.OUTBOUND,
+          body: faqMatch.answer,
+        },
+      });
+
+      updateTenantUserMemory({
+        tenantId: businessConfig.id,
+        userId: customer.id,
+        patch: {
+          intent: intentResult.intent,
+          collectedData: {
+            faqQuestion: faqMatch.question,
+            faqAnswerUsed: true,
+          },
+          stage: "faq_answered",
+        },
+      });
+
+      return;
+    }
 
     if (detectHumanRequest(incoming.text)) {
       await markHumanRequired({
@@ -553,9 +612,9 @@ const handleSingleMessage = async (incoming) => {
     });
 
     const toggleKey = inferToggleType({
-      text: guardrailCheck.sanitizedMessage,
+      text: sanitizedMessage,
       isFirstCustomerMessage: existingInboundCount === 1,
-      sensitiveIntents: guardrailCheck.sensitiveIntents,
+      sensitiveIntents: detectSensitiveIntent(sanitizedMessage),
     });
 
     const toggleMode = controlToggles[toggleKey];
@@ -590,22 +649,33 @@ const handleSingleMessage = async (incoming) => {
     }
 
     const resolvedCustomerName =
-      resolveKnownCustomerName(customer.name) ||
-      preferredIncomingName ||
-      null;
-    const promptBusinessContext = {
-      ...augmentedBusinessContext,
-      customerName: resolvedCustomerName || "Customer",
-    };
+      resolveKnownCustomerName(customer.name) || preferredIncomingName || null;
 
-    const strictPrompt = buildStrictSystemPrompt(promptBusinessContext);
+    const memory = getTenantUserMemory({
+      tenantId: businessConfig.id,
+      userId: customer.id,
+    });
+
+    const dynamicPrompt = buildDynamicSystemPrompt({
+      businessConfig,
+      customerName: resolvedCustomerName || "Customer",
+      dayPeriod: getDayPeriod(
+        String(
+          (business.aiTrainingData || {})?.timeZone ||
+            process.env.BUSINESS_TIMEZONE ||
+            "Africa/Lagos",
+        ),
+      ),
+      memory,
+    });
+
     const systemPrompt = business.customSystemPrompt
-      ? `${strictPrompt}\n\n=== BUSINESS CUSTOM INSTRUCTIONS ===\n${business.customSystemPrompt}`
-      : strictPrompt;
+      ? `${dynamicPrompt}\n\n=== BUSINESS CUSTOM INSTRUCTIONS ===\n${business.customSystemPrompt}`
+      : dynamicPrompt;
 
     const aiReplyRaw = await generateReply({
       systemPrompt,
-      customerMessage: guardrailCheck.sanitizedMessage,
+      customerMessage: sanitizedMessage,
       conversationHistory: [...previousMessages].reverse(),
     });
 
@@ -614,7 +684,7 @@ const handleSingleMessage = async (incoming) => {
       customerName: resolvedCustomerName,
       isFirstOutbound: existingOutboundCount === 0,
       timeZone:
-        augmentedBusinessContext?.aiTrainingData?.timeZone ||
+        (business.aiTrainingData || {})?.timeZone ||
         process.env.BUSINESS_TIMEZONE ||
         "Africa/Lagos",
     });
@@ -641,6 +711,20 @@ const handleSingleMessage = async (incoming) => {
         console.error("[Webhook] Draft notification failed", error.message);
       }
 
+      updateTenantUserMemory({
+        tenantId: businessConfig.id,
+        userId: customer.id,
+        patch: {
+          intent: intentResult.intent,
+          collectedData: {
+            lastUserMessage: sanitizedMessage,
+            lastAiReply: aiReply,
+            mode: "draft",
+          },
+          stage: "draft_pending_approval",
+        },
+      });
+
       await sendCustomerFallbackReply(
         incoming,
         "Thanks for your message. We’ve received it and someone from the team will get back to you shortly.",
@@ -664,6 +748,20 @@ const handleSingleMessage = async (incoming) => {
             body: aiReply,
           },
         });
+
+        updateTenantUserMemory({
+          tenantId: businessConfig.id,
+          userId: customer.id,
+          patch: {
+            intent: intentResult.intent,
+            collectedData: {
+              lastUserMessage: sanitizedMessage,
+              lastAiReply: aiReply,
+              mode: "auto",
+            },
+            stage: "responded",
+          },
+        });
       } catch (error) {
         console.error("[Webhook] Failed to send AI reply", error.message);
         await sendCustomerFallbackReply(
@@ -681,6 +779,19 @@ const handleSingleMessage = async (incoming) => {
         incoming,
         "Thanks for your message. We’ve received it and will get back to you shortly.",
       );
+
+      updateTenantUserMemory({
+        tenantId: businessConfig.id,
+        userId: customer.id,
+        patch: {
+          intent: intentResult.intent,
+          collectedData: {
+            lastUserMessage: sanitizedMessage,
+            mode: "fallback",
+          },
+          stage: "fallback",
+        },
+      });
     }
 
     await prisma.platformMetric.upsert({

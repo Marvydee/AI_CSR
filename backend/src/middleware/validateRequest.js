@@ -133,6 +133,11 @@ const productImportSchema = Joi.object({
 
 const trainingUpdateSchema = Joi.object({
   services: Joi.array().items(Joi.string().trim()).optional(),
+  description: Joi.string().trim().max(1200).allow("", null).optional(),
+  tone: Joi.string()
+    .trim()
+    .valid("friendly", "professional", "casual")
+    .optional(),
   prices: Joi.object().optional(),
   faqs: Joi.array()
     .items(
@@ -150,6 +155,7 @@ const trainingUpdateSchema = Joi.object({
   location: Joi.string().trim().max(200).optional(),
   paymentMethods: Joi.array().items(Joi.string().trim()).optional(),
   escalationRule: Joi.string().trim().max(600).optional(),
+  restrictions: Joi.array().items(Joi.string().trim()).optional(),
   followUpEnabled: Joi.boolean().optional(),
   followUpDelayHours: Joi.number().min(1).max(168).optional(),
   followUpMessage: Joi.string().trim().max(500).optional(),
