@@ -8,6 +8,18 @@ const tenantMemory = new Map();
 
 const uniq = (items) => [...new Set(items.filter(Boolean))];
 
+const formatNaturalList = (items) => {
+  const values = uniq(
+    Array.isArray(items) ? items.map((item) => String(item || "").trim()) : [],
+  ).filter(Boolean);
+
+  if (values.length === 0) return "";
+  if (values.length === 1) return values[0];
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+
+  return `${values.slice(0, -1).join(", ")}, and ${values[values.length - 1]}`;
+};
+
 const normalizeText = (value) =>
   String(value || "")
     .toLowerCase()
@@ -241,7 +253,7 @@ export const buildDynamicSystemPrompt = ({
 }) => {
   const servicesText =
     businessConfig.services.length > 0
-      ? businessConfig.services.join(", ")
+      ? formatNaturalList(businessConfig.services)
       : "No services configured yet";
 
   const restrictionsText =
@@ -261,7 +273,7 @@ export const buildDynamicSystemPrompt = ({
     : "No prior memory";
 
   return [
-    `You are a customer service assistant for ${businessConfig.name}.`,
+    `You are a friendly, helpful, professional customer service representative for ${businessConfig.name}.`,
     "",
     "Business Description:",
     `${businessConfig.description}`,
@@ -269,20 +281,34 @@ export const buildDynamicSystemPrompt = ({
     "Services Offered:",
     `${servicesText}`,
     "",
+    "Conversation Style:",
+    "- Sound warm, human, and natural, not robotic or overly formal",
+    "- Keep replies to 2-3 short sentences",
+    "- Ask only one relevant follow-up question",
+    "- Gently guide the customer toward a sale, quote, booking, or next step",
+    "- Mention services naturally when relevant instead of waiting to be asked",
+    "- Do not repeat greetings in every message",
+    "- Never invent facts, names, prices, or services",
+    "",
     "Rules:",
-    "- Only respond to questions related to these services",
-    "- Do not answer outside this scope",
+    "- Only respond within the business scope and avoid unrelated topics",
+    "- Be firm about boundaries, but never harsh, dismissive, or rude",
     "- Do not hallucinate or invent information",
-    "- Keep responses short and natural",
-    `- Match this tone: ${businessConfig.tone}`,
+    `- Match this tone: friendly, helpful, professional${businessConfig.tone ? ` (${businessConfig.tone})` : ""}`,
+    "",
+    "Greeting handling:",
+    `- If the customer says hi, hello, hey, or another greeting, respond with a greeting, a brief business introduction, and an offer to help`,
+    `- Example: Hello! Welcome to ${businessConfig.name}. We specialize in ${servicesText}. How can I help you today?`,
     "",
     "If a request is unrelated:",
-    `Say: 'I can only assist with ${servicesText}.'`,
+    `Use a soft redirection such as: 'I can help with our ${servicesText} services. Let me know what you need, and I’ll guide you from there.'`,
     "",
     "Additional Guidance:",
     `- Current customer display name: ${customerName || "Customer"}`,
     `- Current day period: ${dayPeriod}`,
-    "- If customer name is unknown, use 'Customer' and politely ask for their name only when relevant.",
+    "- If the customer name is unknown, use 'Customer' and ask for their name only when it helps the conversation",
+    "- If the customer asks about a service, answer directly and then ask one helpful follow-up question",
+    "- Keep the conversation moving toward a quote, booking, order, or support resolution",
     "- Keep conversation continuity using prior memory summary.",
     "",
     "Business Restrictions:",
@@ -299,9 +325,9 @@ export const buildDynamicSystemPrompt = ({
 export const buildIrrelevantResponse = (businessConfig) => {
   const servicesText =
     businessConfig.services.length > 0
-      ? businessConfig.services.join(", ")
+      ? formatNaturalList(businessConfig.services)
       : "our listed services";
-  return `I can only assist with ${servicesText}.`;
+  return `I can help with our ${servicesText} services. Let me know what you need, and I’ll guide you from there.`;
 };
 
 export const getTenantMemorySnapshot = () => {
