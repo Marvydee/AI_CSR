@@ -27,6 +27,8 @@ import {
   sendOwnerHandoffNotification,
   sendWhatsAppText,
 } from "../services/whatsapp.js";
+import { transcribeWhatsAppAudioByMediaId } from "../services/transcription.js";
+import { analyzeWhatsAppImageByMediaId } from "../services/vision.js";
 import { ensureDatabaseTimestampsAreValid } from "../utils/repairTimestamps.js";
 
 const isPlaceholderCustomerName = (value) => {
@@ -141,7 +143,7 @@ const buildMediaOnlyCustomerMessage = (messageType) => {
   const label = humanizeMediaType(messageType);
 
   if (label === "image") {
-    return "Customer sent an image without text. You cannot view images directly. Respond warmly, acknowledge the image, mention the business services naturally, and ask one clear follow-up question to continue help.";
+    return "Customer sent an image without text and image analysis was unavailable. Respond warmly, acknowledge the image, mention the business services naturally, and ask one clear follow-up question to continue help.";
   }
 
   if (label === "voice note" || label === "audio") {
@@ -246,6 +248,18 @@ const parseIncomingMessages = (payload) => {
           all.push({
             text,
             messageType,
+            mediaId:
+              msg?.audio?.id ||
+              msg?.image?.id ||
+              msg?.video?.id ||
+              msg?.document?.id ||
+              null,
+            mimeType:
+              msg?.audio?.mime_type ||
+              msg?.image?.mime_type ||
+              msg?.video?.mime_type ||
+              msg?.document?.mime_type ||
+              null,
             customerWaId: msg.from,
             customerName: isPlaceholderCustomerName(
               matchedContact?.profile?.name,
@@ -454,8 +468,43 @@ const handleSingleMessage = async (incoming) => {
       activeProducts,
     });
 
-    const sanitizedMessage = sanitizeInput(incoming.text);
+    let incomingText = String(incoming.text || "");
     const mediaType = String(incoming.messageType || "text").toLowerCase();
+    const isAudioMessage = mediaType === "voice_note" || mediaType === "audio";
+    const isImageMessage = mediaType === "image";
+
+    if (!incomingText && isAudioMessage && incoming.mediaId) {
+      const transcript = await transcribeWhatsAppAudioByMediaId({
+        mediaId: incoming.mediaId,
+        fallbackMimeType: incoming.mimeType,
+      });
+
+      if (transcript) {
+        incomingText = transcript;
+      }
+    }
+
+    if (
+      !incomingText &&
+      isImageMessage &&
+      incoming.mediaId &&
+      businessConfig.imageAnalysisEnabled !== false
+    ) {
+      const imageSummary = await analyzeWhatsAppImageByMediaId({
+        mediaId: incoming.mediaId,
+        fallbackMimeType: incoming.mimeType,
+        businessName: business.name,
+        services: Array.isArray(businessConfig.services)
+          ? businessConfig.services
+          : [],
+      });
+
+      if (imageSummary) {
+        incomingText = imageSummary;
+      }
+    }
+
+    const sanitizedMessage = sanitizeInput(incomingText);
     const isMediaWithoutText = mediaType !== "text" && !sanitizedMessage;
     const normalizedCustomerMessage = isMediaWithoutText
       ? buildMediaOnlyCustomerMessage(mediaType)
@@ -620,7 +669,7 @@ const handleSingleMessage = async (incoming) => {
       return;
     }
 
-    if (detectHumanRequest(incoming.text)) {
+    if (detectHumanRequest(normalizedCustomerMessage)) {
       await markHumanRequired({
         conversationId: conversation.id,
         reason: "Customer requested human (person/human/boss detected)",

@@ -136,6 +136,10 @@ export const loadBusinessConfig = ({ business, activeProducts = [] }) => {
     tone: inferTone(trainingData),
     faqs,
     restrictions,
+    imageAnalysisEnabled:
+      typeof trainingData.imageAnalysisEnabled === "boolean"
+        ? trainingData.imageAnalysisEnabled
+        : true,
   };
 };
 
