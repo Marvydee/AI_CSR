@@ -480,9 +480,15 @@ const handleSingleMessage = async (incoming) => {
       },
     });
 
+    const memory = getTenantUserMemory({
+      tenantId: businessConfig.id,
+      userId: customer.id,
+    });
+
     const intentResult = classifyIntent({
       message: sanitizedMessage,
       businessConfig,
+      memory,
     });
 
     if (!intentResult.isRelevant) {
@@ -650,11 +656,6 @@ const handleSingleMessage = async (incoming) => {
 
     const resolvedCustomerName =
       resolveKnownCustomerName(customer.name) || preferredIncomingName || null;
-
-    const memory = getTenantUserMemory({
-      tenantId: businessConfig.id,
-      userId: customer.id,
-    });
 
     const dynamicPrompt = buildDynamicSystemPrompt({
       businessConfig,

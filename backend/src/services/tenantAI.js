@@ -8,9 +8,25 @@ const tenantMemory = new Map();
 
 const uniq = (items) => [...new Set(items.filter(Boolean))];
 
+const toServiceText = (item) => {
+  if (!item) return "";
+
+  if (typeof item === "string") {
+    return item.trim();
+  }
+
+  if (typeof item === "object") {
+    return String(
+      item.name || item.title || item.service || item.label || "",
+    ).trim();
+  }
+
+  return String(item).trim();
+};
+
 const formatNaturalList = (items) => {
   const values = uniq(
-    Array.isArray(items) ? items.map((item) => String(item || "").trim()) : [],
+    Array.isArray(items) ? items.map(toServiceText) : [],
   ).filter(Boolean);
 
   if (values.length === 0) return "";
@@ -79,7 +95,7 @@ export const loadBusinessConfig = ({ business, activeProducts = [] }) => {
       : {};
 
   const configuredServices = Array.isArray(trainingData.services)
-    ? trainingData.services.map((item) => String(item || "").trim())
+    ? trainingData.services.map(toServiceText)
     : [];
 
   const productServices = activeProducts
@@ -123,7 +139,7 @@ export const loadBusinessConfig = ({ business, activeProducts = [] }) => {
   };
 };
 
-export const classifyIntent = ({ message, businessConfig }) => {
+export const classifyIntent = ({ message, businessConfig, memory = null }) => {
   const normalizedMessage = normalizeText(message);
   const services = Array.isArray(businessConfig?.services)
     ? businessConfig.services
@@ -152,9 +168,24 @@ export const classifyIntent = ({ message, businessConfig }) => {
   else if (bookingPatterns.test(normalizedMessage)) intent = "booking";
   else if (greetingPatterns.test(normalizedMessage)) intent = "greeting";
 
+  const priorIntent = String(memory?.intent || "")
+    .trim()
+    .toLowerCase();
+  const priorRelevant = memory?.collectedData?.isRelevant !== false;
+  const contextualFollowUpPatterns =
+    /\b(can i|could i|should i|can you|what about|how about|this one|that one|picture|photo|image|send a pic|send picture|send a picture|send photo|location|size)\b/i;
+  const isContextualFollowUp =
+    contextualFollowUpPatterns.test(normalizedMessage) &&
+    priorRelevant &&
+    Boolean(priorIntent);
+
   const isGreeting = intent === "greeting";
   const hasServices = services.length > 0;
-  const isRelevant = isGreeting || !hasServices || matchedKeywords.length > 0;
+  const isRelevant =
+    isGreeting ||
+    !hasServices ||
+    matchedKeywords.length > 0 ||
+    isContextualFollowUp;
 
   return {
     intent,
@@ -167,6 +198,7 @@ export const classifyIntent = ({ message, businessConfig }) => {
         }),
       ),
       matchedKeywords: uniq(matchedKeywords),
+      isContextualFollowUp,
     },
   };
 };
@@ -298,6 +330,7 @@ export const buildDynamicSystemPrompt = ({
     "",
     "Greeting handling:",
     `- If the customer says hi, hello, hey, or another greeting, respond with a greeting, a brief business introduction, and an offer to help`,
+    "- If the customer adds a greeting later in the chat (for example: good evening), acknowledge it briefly before continuing",
     `- Example: Hello! Welcome to ${businessConfig.name}. We specialize in ${servicesText}. How can I help you today?`,
     "",
     "If a request is unrelated:",
