@@ -123,11 +123,40 @@ const getDayPeriod = (timeZone) => {
   }
 };
 
+const hasGreetingLead = (value) =>
+  /\b(hello|hi|hey|good\s+(morning|afternoon|evening)|welcome)\b/i.test(
+    String(value || "").slice(0, 140),
+  );
+
+const humanizeMediaType = (value) => {
+  const type = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!type) return "media";
+  if (type === "voice_note") return "voice note";
+  return type.replace(/_/g, " ");
+};
+
+const buildMediaOnlyCustomerMessage = (messageType) => {
+  const label = humanizeMediaType(messageType);
+
+  if (label === "image") {
+    return "Customer sent an image without text. You cannot view images directly. Respond warmly, acknowledge the image, mention the business services naturally, and ask one clear follow-up question to continue help.";
+  }
+
+  if (label === "voice note" || label === "audio") {
+    return "Customer sent a voice note/audio without text. You cannot listen to audio directly. Respond warmly, mention available services naturally, and ask for a short text summary in one polite follow-up question.";
+  }
+
+  return `Customer sent a ${label} without text. Respond warmly, mention relevant services naturally, and ask one clear follow-up question to keep helping.`;
+};
+
 const enforceReplyQuality = ({
   reply,
   customerName,
   isFirstOutbound,
   timeZone,
+  businessName,
 }) => {
   let normalized = String(reply || "").trim();
   if (!normalized) return normalized;
@@ -144,6 +173,9 @@ const enforceReplyQuality = ({
       /^\s*good\s+(morning|afternoon|evening)\b[^.!?]*[.!?]?\s*/i,
       "",
     );
+  } else if (!hasGreetingLead(normalized)) {
+    const welcomeName = String(businessName || "our team").trim();
+    normalized = `Good ${dayPeriod}! Welcome to ${welcomeName}. ${normalized}`;
   }
 
   if (!customerName) {
@@ -199,13 +231,21 @@ const parseIncomingMessages = (payload) => {
         );
 
         for (const msg of change.value.messages) {
-          const text = msg?.text?.body || "";
-          if (!text) continue;
+          const rawType = String(msg?.type || "text").toLowerCase();
+          const messageType =
+            rawType === "audio" && msg?.audio?.voice ? "voice_note" : rawType;
+          const text =
+            msg?.text?.body ||
+            msg?.image?.caption ||
+            msg?.video?.caption ||
+            msg?.document?.caption ||
+            "";
 
           const matchedContact = contactByWaId.get(msg.from) || contacts[0];
 
           all.push({
             text,
+            messageType,
             customerWaId: msg.from,
             customerName: isPlaceholderCustomerName(
               matchedContact?.profile?.name,
@@ -415,13 +455,19 @@ const handleSingleMessage = async (incoming) => {
     });
 
     const sanitizedMessage = sanitizeInput(incoming.text);
-    if (!sanitizedMessage) {
+    const mediaType = String(incoming.messageType || "text").toLowerCase();
+    const isMediaWithoutText = mediaType !== "text" && !sanitizedMessage;
+    const normalizedCustomerMessage = isMediaWithoutText
+      ? buildMediaOnlyCustomerMessage(mediaType)
+      : sanitizedMessage;
+
+    if (!normalizedCustomerMessage) {
       await sendCustomerFallbackReply(incoming);
       return;
     }
 
-    const isInjectionAttempt = detectPromptInjection(sanitizedMessage);
-    if (isInjectionAttempt) {
+    const isInjectionAttempt = detectPromptInjection(normalizedCustomerMessage);
+    if (isInjectionAttempt && !isMediaWithoutText) {
       console.warn("[Webhook] Message blocked by guardrails", {
         businessId: business.id,
         customerWaId: incoming.customerWaId,
@@ -436,8 +482,9 @@ const handleSingleMessage = async (incoming) => {
       return;
     }
 
-    const inferredNameFromMessage =
-      extractCustomerNameFromMessage(sanitizedMessage);
+    const inferredNameFromMessage = extractCustomerNameFromMessage(
+      normalizedCustomerMessage,
+    );
     const preferredIncomingName =
       resolveKnownCustomerName(incoming.customerName) ||
       inferredNameFromMessage;
@@ -475,7 +522,9 @@ const handleSingleMessage = async (incoming) => {
       data: {
         conversationId: conversation.id,
         direction: MessageDirection.INBOUND,
-        body: sanitizedMessage,
+        body: isMediaWithoutText
+          ? `[Customer sent ${humanizeMediaType(mediaType)} without text]`
+          : normalizedCustomerMessage,
         metaMessageId: incoming.metaMessageId,
       },
     });
@@ -485,11 +534,21 @@ const handleSingleMessage = async (incoming) => {
       userId: customer.id,
     });
 
-    const intentResult = classifyIntent({
-      message: sanitizedMessage,
-      businessConfig,
-      memory,
-    });
+    const intentResult = isMediaWithoutText
+      ? {
+          intent: "general",
+          isRelevant: true,
+          entities: {
+            matchedServices: [],
+            matchedKeywords: [],
+            isMediaOnly: true,
+          },
+        }
+      : classifyIntent({
+          message: normalizedCustomerMessage,
+          businessConfig,
+          memory,
+        });
 
     if (!intentResult.isRelevant) {
       const irrelevantReply = buildIrrelevantResponse(businessConfig);
@@ -515,7 +574,7 @@ const handleSingleMessage = async (incoming) => {
           intent: intentResult.intent,
           collectedData: {
             isRelevant: false,
-            lastUserMessage: sanitizedMessage,
+            lastUserMessage: normalizedCustomerMessage,
             matchedServices: intentResult.entities?.matchedServices || [],
           },
           stage: "irrelevant",
@@ -526,7 +585,7 @@ const handleSingleMessage = async (incoming) => {
     }
 
     const faqMatch = findFaqMatch({
-      message: sanitizedMessage,
+      message: normalizedCustomerMessage,
       faqs: businessConfig.faqs,
     });
 
@@ -618,9 +677,9 @@ const handleSingleMessage = async (incoming) => {
     });
 
     const toggleKey = inferToggleType({
-      text: sanitizedMessage,
+      text: normalizedCustomerMessage,
       isFirstCustomerMessage: existingInboundCount === 1,
-      sensitiveIntents: detectSensitiveIntent(sanitizedMessage),
+      sensitiveIntents: detectSensitiveIntent(normalizedCustomerMessage),
     });
 
     const toggleMode = controlToggles[toggleKey];
@@ -676,7 +735,7 @@ const handleSingleMessage = async (incoming) => {
 
     const aiReplyRaw = await generateReply({
       systemPrompt,
-      customerMessage: sanitizedMessage,
+      customerMessage: normalizedCustomerMessage,
       conversationHistory: [...previousMessages].reverse(),
     });
 
@@ -688,6 +747,7 @@ const handleSingleMessage = async (incoming) => {
         (business.aiTrainingData || {})?.timeZone ||
         process.env.BUSINESS_TIMEZONE ||
         "Africa/Lagos",
+      businessName: business.name,
     });
 
     if (shouldDraftForApproval(toggleMode)) {
@@ -718,7 +778,7 @@ const handleSingleMessage = async (incoming) => {
         patch: {
           intent: intentResult.intent,
           collectedData: {
-            lastUserMessage: sanitizedMessage,
+            lastUserMessage: normalizedCustomerMessage,
             lastAiReply: aiReply,
             mode: "draft",
           },
@@ -756,7 +816,7 @@ const handleSingleMessage = async (incoming) => {
           patch: {
             intent: intentResult.intent,
             collectedData: {
-              lastUserMessage: sanitizedMessage,
+              lastUserMessage: normalizedCustomerMessage,
               lastAiReply: aiReply,
               mode: "auto",
             },
@@ -787,7 +847,7 @@ const handleSingleMessage = async (incoming) => {
         patch: {
           intent: intentResult.intent,
           collectedData: {
-            lastUserMessage: sanitizedMessage,
+            lastUserMessage: normalizedCustomerMessage,
             mode: "fallback",
           },
           stage: "fallback",
