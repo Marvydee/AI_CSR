@@ -168,6 +168,10 @@ export const classifyIntent = ({ message, businessConfig, memory = null }) => {
   const bookingPatterns = /\b(book|booking|reserve|appointment|schedule)\b/i;
   const clarifyingQuestionPatterns =
     /^\s*(how|why|what|where|when|can|could|would|do|does|did|is|are|isn't|aren't|don't|doesn't|didn't|have|has|hadn't|will|won't)\b/i;
+  const affirmationPatterns =
+    /^\s*(yes|yeah|yep|sure|ok|okay|alright|absolutely|definitely|sounds good|got it|understood)\b/i;
+  const negationPatterns =
+    /^\s*(no|nope|not really|don't think so|not interested)\b/i;
 
   let intent = "general";
   if (pricingPatterns.test(normalizedMessage)) intent = "pricing";
@@ -188,6 +192,12 @@ export const classifyIntent = ({ message, businessConfig, memory = null }) => {
   const isClarifyingQuestion =
     clarifyingQuestionPatterns.test(normalizedMessage) && Boolean(priorIntent);
 
+  const isAffirmation =
+    affirmationPatterns.test(normalizedMessage) && Boolean(priorIntent);
+
+  const isNegation =
+    negationPatterns.test(normalizedMessage) && Boolean(priorIntent);
+
   const isGreeting = intent === "greeting";
   const hasServices = services.length > 0;
   const isRelevant =
@@ -195,7 +205,9 @@ export const classifyIntent = ({ message, businessConfig, memory = null }) => {
     !hasServices ||
     matchedKeywords.length > 0 ||
     isContextualFollowUp ||
-    isClarifyingQuestion;
+    isClarifyingQuestion ||
+    isAffirmation ||
+    isNegation;
 
   return {
     intent,
@@ -210,6 +222,8 @@ export const classifyIntent = ({ message, businessConfig, memory = null }) => {
       matchedKeywords: uniq(matchedKeywords),
       isContextualFollowUp,
       isClarifyingQuestion,
+      isAffirmation,
+      isNegation,
     },
   };
 };
@@ -368,12 +382,18 @@ export const buildDynamicSystemPrompt = ({
   ].join("\n");
 };
 
-export const buildIrrelevantResponse = (businessConfig) => {
+export const buildIrrelevantResponse = (
+  businessConfig,
+  customerName = null,
+) => {
   const servicesText =
     businessConfig.services.length > 0
       ? formatNaturalList(businessConfig.services)
-      : "our listed services";
-  return `I can help with our ${servicesText} services. Let me know what you need, and I’ll guide you from there.`;
+      : "our services";
+
+  const namePrefix = customerName ? `${customerName}, ` : "";
+
+  return `${namePrefix}I specialize in ${servicesText}. What can I help you with today?`;
 };
 
 export const getTenantMemorySnapshot = () => {

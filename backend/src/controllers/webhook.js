@@ -600,7 +600,10 @@ const handleSingleMessage = async (incoming) => {
         });
 
     if (!intentResult.isRelevant) {
-      const irrelevantReply = buildIrrelevantResponse(businessConfig);
+      const irrelevantReply = buildIrrelevantResponse(
+        businessConfig,
+        customerDisplayName,
+      );
 
       await sendWhatsAppText({
         phoneNumberId: incoming.phoneNumberId,
