@@ -166,6 +166,8 @@ export const classifyIntent = ({ message, businessConfig, memory = null }) => {
   const pricingPatterns =
     /\b(price|cost|how much|quote|amount|fee|charges?)\b/i;
   const bookingPatterns = /\b(book|booking|reserve|appointment|schedule)\b/i;
+  const clarifyingQuestionPatterns =
+    /^\s*(how|why|what|where|when|can|could|would|do|does|did|is|are|isn't|aren't|don't|doesn't|didn't|have|has|hadn't|will|won't)\b/i;
 
   let intent = "general";
   if (pricingPatterns.test(normalizedMessage)) intent = "pricing";
@@ -183,13 +185,17 @@ export const classifyIntent = ({ message, businessConfig, memory = null }) => {
     priorRelevant &&
     Boolean(priorIntent);
 
+  const isClarifyingQuestion =
+    clarifyingQuestionPatterns.test(normalizedMessage) && Boolean(priorIntent);
+
   const isGreeting = intent === "greeting";
   const hasServices = services.length > 0;
   const isRelevant =
     isGreeting ||
     !hasServices ||
     matchedKeywords.length > 0 ||
-    isContextualFollowUp;
+    isContextualFollowUp ||
+    isClarifyingQuestion;
 
   return {
     intent,
@@ -203,6 +209,7 @@ export const classifyIntent = ({ message, businessConfig, memory = null }) => {
       ),
       matchedKeywords: uniq(matchedKeywords),
       isContextualFollowUp,
+      isClarifyingQuestion,
     },
   };
 };
@@ -318,12 +325,12 @@ export const buildDynamicSystemPrompt = ({
     `${servicesText}`,
     "",
     "Conversation Style:",
-    "- Sound warm, human, and natural, not robotic or overly formal",
-    "- Keep replies to 2-3 short sentences",
-    "- Ask only one relevant follow-up question",
-    "- Gently guide the customer toward a sale, quote, booking, or next step",
-    "- Mention services naturally when relevant instead of waiting to be asked",
-    "- Do not repeat greetings in every message",
+    "- ALWAYS answer the customer's question directly and naturally",
+    "- Sound warm, human, and genuine—NOT robotic, templated, or overly formal",
+    "- Keep replies to 2-3 short sentences maximum",
+    "- Ask only ONE follow-up question (or skip if conversation flows better)",
+    "- Never use canned responses",
+    "- Acknowledge what the customer said before moving on",
     "- Never invent facts, names, prices, or services",
     "",
     "Rules:",
@@ -333,12 +340,14 @@ export const buildDynamicSystemPrompt = ({
     `- Match this tone: friendly, helpful, professional${businessConfig.tone ? ` (${businessConfig.tone})` : ""}`,
     "",
     "Greeting handling:",
-    `- If the customer says hi, hello, hey, or another greeting, respond with a greeting, a brief business introduction, and an offer to help`,
-    "- If the customer adds a greeting later in the chat (for example: good evening), acknowledge it briefly before continuing",
-    `- Example: Hello! Welcome to ${businessConfig.name}. We specialize in ${servicesText}. How can I help you today?`,
+    "- If the customer greets you, respond warmly and offer to help",
+    "- Keep first responses brief and friendly",
+    `- Example: Hello! I'm here to help with ${servicesText}. What can I assist you with?`,
     "",
-    "If a request is unrelated:",
-    `Use a soft redirection such as: 'I can help with our ${servicesText} services. Let me know what you need, and I’ll guide you from there.'`,
+    "Handling Questions:",
+    "- Clarifying questions (How, Why, What, When, Where) = Always answer directly",
+    "- Don't deflect or redirect—explain naturally and continue",
+    "- Only mention services if the customer asks or if you can genuinely help",
     "",
     "Additional Guidance:",
     `- Current customer display name: ${customerName || "Customer"}`,

@@ -66,7 +66,7 @@ export const generateReply = async ({
 
     const payload = {
       model: "llama-3.3-70b-versatile",
-      temperature: 0.25,
+      temperature: 0.75,
       max_tokens: 280,
       messages: [
         { role: "system", content: systemPrompt },
