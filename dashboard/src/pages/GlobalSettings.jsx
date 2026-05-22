@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
+import { apiUrl } from "../services/apiBase.js";
 
 const GlobalSettings = () => {
   const { token } = useContext(AuthContext);
@@ -15,12 +17,9 @@ const GlobalSettings = () => {
     const fetchMetrics = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/superadmin/metrics`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const response = await fetch(apiUrl("/api/superadmin/metrics"), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         if (!response.ok) throw new Error("Failed to fetch metrics");
         const data = await response.json();
@@ -49,6 +48,15 @@ const GlobalSettings = () => {
           Monitor platform health and API usage.
         </p>
       </div>
+
+      <PageGuide
+        title="How to read this dashboard"
+        steps={[
+          "Watch total webhook requests for traffic growth.",
+          "Track error rate spikes and investigate quickly.",
+          "Use response time trends to detect performance issues.",
+        ]}
+      />
 
       {isLoading ? (
         <p className="text-slate-600">Loading metrics...</p>

@@ -1,5 +1,7 @@
 import React, { useContext, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
+import FieldHint from "../components/ui/FieldHint";
 
 const Signup = () => {
   const { signup, isLoading } = useContext(AuthContext);
@@ -9,6 +11,7 @@ const Signup = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [businessName, setBusinessName] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
 
   const handleSubmit = async (event) => {
@@ -21,7 +24,7 @@ const Signup = () => {
     }
 
     try {
-      await signup({ fullName, email, password, businessName });
+      await signup({ fullName, email, password, businessName, inviteCode });
       window.history.replaceState({}, "", "/onboarding");
       window.dispatchEvent(new PopStateEvent("popstate"));
     } catch (signupError) {
@@ -35,10 +38,19 @@ const Signup = () => {
         <div className="auth-brand">Whats_CSR</div>
         <h1 className="auth-title">Create your workspace</h1>
         <p className="auth-subtitle">
-          Start free and set up your WhatsApp sales assistant in a guided flow.
+          Enter your paid access code to activate your WhatsApp sales workspace.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <PageGuide
+          title="Setup takes about 2 minutes"
+          steps={[
+            "Fill your personal and business details.",
+            "Paste your one-time access code exactly as given.",
+            "Create a secure password and continue to onboarding.",
+          ]}
+        />
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="field-label">Full Name</label>
             <input
@@ -49,6 +61,9 @@ const Signup = () => {
               placeholder="Your name"
               required
             />
+            <FieldHint>
+              This appears in account and ownership records.
+            </FieldHint>
           </div>
 
           <div>
@@ -61,6 +76,24 @@ const Signup = () => {
               placeholder="Business or brand name"
               required
             />
+            <FieldHint>Use the name customers recognize.</FieldHint>
+          </div>
+
+          <div>
+            <label className="field-label">Access Code</label>
+            <input
+              className="field-input"
+              value={inviteCode}
+              onChange={(event) =>
+                setInviteCode(event.target.value.toUpperCase())
+              }
+              autoComplete="off"
+              placeholder="AICSR-XXXXXX-XXXXXX"
+              required
+            />
+            <FieldHint>
+              This one-time code is provided by the platform admin.
+            </FieldHint>
           </div>
 
           <div>
@@ -74,6 +107,7 @@ const Signup = () => {
               placeholder="you@example.com"
               required
             />
+            <FieldHint>This email will be used to sign in.</FieldHint>
           </div>
 
           <div>
@@ -96,6 +130,7 @@ const Signup = () => {
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
+            <FieldHint>Use a strong password that is hard to guess.</FieldHint>
           </div>
 
           <div>

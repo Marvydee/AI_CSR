@@ -1,6 +1,9 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
 import AppIcon from "../components/AppIcon";
+import PageGuide from "../components/ui/PageGuide";
+import FieldHint from "../components/ui/FieldHint";
+import { apiUrl } from "../services/apiBase.js";
 
 const OnboardingWizard = () => {
   const { token, user, updateUser } = useContext(AuthContext);
@@ -19,6 +22,7 @@ const OnboardingWizard = () => {
   const [isConnectingWhatsApp, setIsConnectingWhatsApp] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const processedOAuthCallbackRef = useRef("");
 
   const onboardingSteps = useMemo(
     () => [
@@ -62,7 +66,7 @@ const OnboardingWizard = () => {
       setError("");
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/business/${user.businessId}/profile`,
+          apiUrl(`/api/business/${user.businessId}/profile`),
           {
             headers: { Authorization: `Bearer ${token}` },
           },
@@ -111,6 +115,21 @@ const OnboardingWizard = () => {
 
       if (!code || !state) return;
 
+      const callbackKey = `${code}:${state}`;
+      const callbackStorageKey = `oauth_callback_processed:${callbackKey}`;
+      if (
+        processedOAuthCallbackRef.current === callbackKey ||
+        window.sessionStorage.getItem(callbackStorageKey) === "1"
+      ) {
+        window.history.replaceState({}, "", window.location.pathname);
+        return;
+      }
+
+      processedOAuthCallbackRef.current = callbackKey;
+      window.sessionStorage.setItem(callbackStorageKey, "1");
+      // Clear query params immediately so a remount cannot replay the same code.
+      window.history.replaceState({}, "", window.location.pathname);
+
       if (!token || !user?.businessId) return;
 
       try {
@@ -119,7 +138,7 @@ const OnboardingWizard = () => {
         setMessage("");
 
         const callbackResponse = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/business/${user.businessId}/whatsapp/oauth/callback`,
+          apiUrl(`/api/business/${user.businessId}/whatsapp/oauth/callback`),
           {
             method: "POST",
             headers: {
@@ -149,8 +168,6 @@ const OnboardingWizard = () => {
             void refreshOnboarding();
           }, 500);
         }
-
-        window.history.replaceState({}, "", window.location.pathname);
       } catch (callbackError) {
         console.error("[OnboardingWizard] OAuth callback error", {
           message: callbackError.message,
@@ -159,7 +176,6 @@ const OnboardingWizard = () => {
           callbackError.message ||
             "Failed to complete WhatsApp connection. Please try again.",
         );
-        window.history.replaceState({}, "", window.location.pathname);
       } finally {
         setIsConnectingWhatsApp(false);
       }
@@ -172,7 +188,7 @@ const OnboardingWizard = () => {
     if (!token || !user?.businessId) return;
 
     const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/business/${user.businessId}/onboarding`,
+      apiUrl(`/api/business/${user.businessId}/onboarding`),
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -199,7 +215,7 @@ const OnboardingWizard = () => {
 
     try {
       const authorizeResponse = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${user.businessId}/whatsapp/oauth/authorize`,
+        apiUrl(`/api/business/${user.businessId}/whatsapp/oauth/authorize`),
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -246,7 +262,7 @@ const OnboardingWizard = () => {
 
     try {
       const profileResponse = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${user.businessId}/profile`,
+        apiUrl(`/api/business/${user.businessId}/profile`),
         {
           method: "PUT",
           headers: {
@@ -271,7 +287,7 @@ const OnboardingWizard = () => {
       }
 
       const onboardingResponse = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${user.businessId}/onboarding`,
+        apiUrl(`/api/business/${user.businessId}/onboarding`),
         {
           method: "PUT",
           headers: {
@@ -411,6 +427,15 @@ const OnboardingWizard = () => {
               </p>
             </div>
 
+            <PageGuide
+              title="First-time setup guide"
+              steps={[
+                "Start with WhatsApp connection.",
+                "Fill bank details with exact account information.",
+                "Save setup and refresh status to confirm completion.",
+              ]}
+            />
+
             {isLoading ? (
               <p className="muted-text">Loading onboarding...</p>
             ) : null}
@@ -432,6 +457,7 @@ const OnboardingWizard = () => {
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                 />
+                <FieldHint>Use the same name customers see publicly.</FieldHint>
               </div>
               <div>
                 <label className="field-label">Business email</label>
@@ -519,6 +545,9 @@ const OnboardingWizard = () => {
                     !String(whatsappPhoneNumberId || "").startsWith("pending_")
                   }
                 />
+                <FieldHint>
+                  This number is used for owner alerts and support handoffs.
+                </FieldHint>
               </div>
             </div>
 
@@ -554,6 +583,7 @@ const OnboardingWizard = () => {
                 placeholder="0123456789"
                 maxLength={20}
               />
+              <FieldHint>Only numbers are accepted here.</FieldHint>
             </div>
 
             <div>
@@ -564,6 +594,10 @@ const OnboardingWizard = () => {
                 onChange={(e) => setCustomSystemPrompt(e.target.value)}
                 placeholder="Tell the AI how your business should sound..."
               />
+              <FieldHint>
+                Example: Be concise, polite, and ask for order size before
+                quoting.
+              </FieldHint>
             </div>
 
             <div className="panel-actions">

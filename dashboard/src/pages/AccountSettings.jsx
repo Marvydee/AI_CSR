@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
+import { apiUrl } from "../services/apiBase.js";
 
 const AccountSettings = () => {
   const { token, updateUser } = useContext(AuthContext);
@@ -19,12 +20,9 @@ const AccountSettings = () => {
       setError("");
 
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/business/account`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const response = await fetch(apiUrl("/api/business/account"), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
@@ -66,17 +64,14 @@ const AccountSettings = () => {
     };
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/account`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
+      const response = await fetch(apiUrl("/api/business/account"), {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
+        body: JSON.stringify(payload),
+      });
 
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {

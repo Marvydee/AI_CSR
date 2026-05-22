@@ -1,4 +1,5 @@
 import React, { createContext, useState, useCallback } from "react";
+import { apiUrl, getApiBaseUrl } from "../services/apiBase.js";
 
 export const AuthContext = createContext({});
 
@@ -18,23 +19,27 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("accessToken"));
   const [isLoading, setIsLoading] = useState(false);
   const authTimeoutMs = Number(import.meta.env.VITE_AUTH_TIMEOUT_MS || 15000);
+  const apiBaseUrl = getApiBaseUrl();
 
   const submitAuthRequest = useCallback(
     async ({ endpoint, payload }) => {
+      if (!apiBaseUrl) {
+        throw new Error(
+          "API base URL is not configured. Set VITE_API_URL to a reachable backend URL and redeploy the dashboard.",
+        );
+      }
+
       const controller = new AbortController();
       const timeoutMs = Number.isFinite(authTimeoutMs) ? authTimeoutMs : 15000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}${endpoint}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            signal: controller.signal,
-          },
-        );
+        const response = await fetch(apiUrl(endpoint), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
 
         if (!response.ok) {
           let serverMessage = "Request failed";
@@ -55,7 +60,7 @@ export const AuthProvider = ({ children }) => {
         clearTimeout(timeoutId);
       }
     },
-    [authTimeoutMs],
+    [apiBaseUrl, authTimeoutMs],
   );
 
   const login = useCallback(
@@ -87,6 +92,12 @@ export const AuthProvider = ({ children }) => {
           );
         }
 
+        if (String(error.message || "").includes("Failed to fetch")) {
+          throw new Error(
+            "Login request could not reach the backend. Check VITE_API_URL and the backend DNS/Hostinger deployment.",
+          );
+        }
+
         console.error("[Auth] Login error", error.message);
         throw error;
       } finally {
@@ -97,12 +108,12 @@ export const AuthProvider = ({ children }) => {
   );
 
   const signup = useCallback(
-    async ({ fullName, email, password, businessName }) => {
+    async ({ fullName, email, password, businessName, inviteCode }) => {
       setIsLoading(true);
       try {
         const data = await submitAuthRequest({
           endpoint: "/api/auth/admin/signup",
-          payload: { fullName, email, password, businessName },
+          payload: { fullName, email, password, businessName, inviteCode },
         });
 
         setToken(data.accessToken);

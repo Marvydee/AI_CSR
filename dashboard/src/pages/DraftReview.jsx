@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
+import { apiUrl } from "../services/apiBase.js";
 
 const DraftReview = () => {
   const { token, user } = useContext(AuthContext);
@@ -22,7 +23,7 @@ const DraftReview = () => {
     setError("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/drafts?businessId=${user.businessId}`,
+        apiUrl(`/api/business/drafts?businessId=${user.businessId}`),
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -85,7 +86,9 @@ const DraftReview = () => {
     setError("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/drafts/${selectedDraft.id}/approve?businessId=${user.businessId}`,
+        apiUrl(
+          `/api/business/drafts/${selectedDraft.id}/approve?businessId=${user.businessId}`,
+        ),
         {
           method: "PUT",
           headers: {
@@ -117,7 +120,9 @@ const DraftReview = () => {
     setError("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/drafts/${selectedDraft.id}/reject?businessId=${user.businessId}`,
+        apiUrl(
+          `/api/business/drafts/${selectedDraft.id}/reject?businessId=${user.businessId}`,
+        ),
         {
           method: "PUT",
           headers: {

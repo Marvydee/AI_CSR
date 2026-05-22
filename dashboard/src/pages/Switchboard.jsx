@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
+import { apiUrl } from "../services/apiBase.js";
 
 const Switchboard = () => {
   const { token } = useContext(AuthContext);
@@ -10,12 +12,9 @@ const Switchboard = () => {
     const fetchBusinesses = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/superadmin/tenants`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const response = await fetch(apiUrl("/api/superadmin/tenants"), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         if (!response.ok) throw new Error("Failed to fetch tenants");
         const data = await response.json();
@@ -33,7 +32,7 @@ const Switchboard = () => {
   const handleTogglePause = async (businessId, currentState) => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/superadmin/tenants/${businessId}/pause`,
+        apiUrl(`/api/superadmin/tenants/${businessId}/pause`),
         {
           method: "PUT",
           headers: {
@@ -67,6 +66,15 @@ const Switchboard = () => {
           Instantly pause any tenant's bot (e.g., for maintenance or abuse).
         </p>
       </div>
+
+      <PageGuide
+        title="Safe operation"
+        steps={[
+          "Confirm tenant identity before pausing.",
+          "Pause only for incidents, abuse, or maintenance windows.",
+          "Resume immediately once issue is resolved.",
+        ]}
+      />
 
       {isLoading ? (
         <p className="text-slate-600">Loading tenants...</p>

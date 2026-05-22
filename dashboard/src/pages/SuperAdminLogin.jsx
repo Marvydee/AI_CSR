@@ -1,5 +1,6 @@
 import React, { useContext, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
 
 const SuperAdminLogin = () => {
   const { login, isLoading } = useContext(AuthContext);
@@ -27,7 +28,16 @@ const SuperAdminLogin = () => {
           Authorized platform administrators only.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <PageGuide
+          title="Secure access"
+          steps={[
+            "Use your superadmin credentials only.",
+            "Do not share this account with tenant operators.",
+            "Sign out after high-risk platform actions.",
+          ]}
+        />
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="field-label">Email Address</label>
             <input

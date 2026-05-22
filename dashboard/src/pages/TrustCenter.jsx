@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
+import { apiUrl } from "../services/apiBase.js";
 
-const toggleOptions = ["AI_FULL", "AI_ASK", "HUMAN_ONLY"];
+const toggleOptions = [
+  { value: "AI_FULL", label: "Auto Reply (AI_FULL)" },
+  { value: "AI_ASK", label: "Ask Before Sending (AI_ASK)" },
+  { value: "HUMAN_ONLY", label: "Human Only (HUMAN_ONLY)" },
+];
 
 const TrustCenter = () => {
   const { token, user } = useContext(AuthContext);
@@ -13,7 +19,7 @@ const TrustCenter = () => {
       setIsLoading(true);
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/business/toggles?businessId=${user?.businessId || ""}`,
+          apiUrl(`/api/business/toggles?businessId=${user?.businessId || ""}`),
           {
             headers: { Authorization: `Bearer ${token}` },
           },
@@ -37,7 +43,9 @@ const TrustCenter = () => {
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/toggles/${key}?businessId=${user?.businessId || ""}`,
+        apiUrl(
+          `/api/business/toggles/${key}?businessId=${user?.businessId || ""}`,
+        ),
         {
           method: "PUT",
           headers: {
@@ -86,10 +94,18 @@ const TrustCenter = () => {
           Trust Center
         </h2>
         <p className="text-sm text-slate-600">
-          Control when the AI can act autonomously (AI_FULL), needs your
-          approval (AI_ASK), or must hand off to you (HUMAN_ONLY).
+          Choose how much decision power AI has in each scenario.
         </p>
       </div>
+
+      <PageGuide
+        title="How these controls work"
+        steps={[
+          "Start with Ask Before Sending while tuning AI behavior.",
+          "Use Auto Reply only where mistakes are low risk.",
+          "Use Human Only for sensitive flows such as payments.",
+        ]}
+      />
 
       {isLoading ? (
         <p className="text-slate-600">Loading toggles...</p>
@@ -111,8 +127,8 @@ const TrustCenter = () => {
                   className="border border-slate-300 rounded px-3 py-1 text-sm"
                 >
                   {toggleOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
                     </option>
                   ))}
                 </select>

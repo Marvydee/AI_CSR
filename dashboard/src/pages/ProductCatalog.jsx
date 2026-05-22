@@ -1,5 +1,8 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
+import FieldHint from "../components/ui/FieldHint";
+import { apiUrl } from "../services/apiBase.js";
 
 const defaultForm = {
   name: "",
@@ -18,6 +21,8 @@ const ProductCatalog = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importStatus, setImportStatus] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const businessId = user?.businessId;
 
   const sortedProducts = useMemo(
@@ -31,7 +36,7 @@ const ProductCatalog = () => {
     setIsLoading(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${businessId}/products`,
+        apiUrl(`/api/business/${businessId}/products`),
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -40,8 +45,9 @@ const ProductCatalog = () => {
       if (!response.ok) throw new Error("Failed to fetch products");
       const data = await response.json();
       setProducts(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("[ProductCatalog] Fetch error", error.message);
+    } catch (fetchError) {
+      console.error("[ProductCatalog] Fetch error", fetchError.message);
+      setError(fetchError.message || "Could not load products");
     } finally {
       setIsLoading(false);
     }
@@ -57,14 +63,16 @@ const ProductCatalog = () => {
 
     const numericPrice = Number(form.price);
     if (!Number.isFinite(numericPrice) || numericPrice < 0) {
-      alert("Enter a valid price");
+      setError("Enter a valid price.");
       return;
     }
 
     setIsSaving(true);
+    setError("");
+    setMessage("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${businessId}/products`,
+        apiUrl(`/api/business/${businessId}/products`),
         {
           method: "POST",
           headers: {
@@ -88,10 +96,11 @@ const ProductCatalog = () => {
       }
 
       setForm(defaultForm);
+      setMessage("Product added successfully.");
       await fetchProducts();
-    } catch (error) {
-      console.error("[ProductCatalog] Save error", error.message);
-      alert(error.message || "Could not save product");
+    } catch (saveError) {
+      console.error("[ProductCatalog] Save error", saveError.message);
+      setError(saveError.message || "Could not save product");
     } finally {
       setIsSaving(false);
     }
@@ -100,9 +109,11 @@ const ProductCatalog = () => {
   const onArchiveProduct = async (productId) => {
     if (!businessId || !token) return;
 
+    setError("");
+    setMessage("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${businessId}/products/${productId}`,
+        apiUrl(`/api/business/${businessId}/products/${productId}`),
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
@@ -110,24 +121,27 @@ const ProductCatalog = () => {
       );
 
       if (!response.ok) throw new Error("Failed to archive product");
+      setMessage("Product archived.");
       await fetchProducts();
-    } catch (error) {
-      console.error("[ProductCatalog] Archive error", error.message);
-      alert("Could not archive product");
+    } catch (archiveError) {
+      console.error("[ProductCatalog] Archive error", archiveError.message);
+      setError(archiveError.message || "Could not archive product");
     }
   };
 
   const onUploadExcel = async () => {
     if (!importFile || !businessId || !token) {
-      alert("Select an Excel file first");
+      setError("Select an Excel file first.");
       return;
     }
 
     setImportStatus("Uploading...");
+    setError("");
+    setMessage("");
     try {
       const base64 = await toBase64(importFile);
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${businessId}/products/import`,
+        apiUrl(`/api/business/${businessId}/products/import`),
         {
           method: "POST",
           headers: {
@@ -152,104 +166,125 @@ const ProductCatalog = () => {
       setImportStatus(
         `Imported. Created: ${payload.created || 0}, Updated: ${payload.updated || 0}`,
       );
+      setMessage("Product import completed.");
       await fetchProducts();
-    } catch (error) {
-      console.error("[ProductCatalog] Import error", error.message);
-      setImportStatus(`Import failed: ${error.message}`);
+    } catch (importError) {
+      console.error("[ProductCatalog] Import error", importError.message);
+      setImportStatus(`Import failed: ${importError.message}`);
+      setError(importError.message || "Import failed");
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-900">
-          Product Catalog
-        </h2>
-        <p className="text-sm text-slate-600">
-          Add products with pricing or import from Excel. The AI will use this
-          live catalog when answering customer questions.
+    <section className="space-y-6">
+      <div className="section-heading">
+        <h2>Product Catalog</h2>
+        <p>
+          Add products and prices so AI can respond with accurate offers in
+          customer chats.
         </p>
       </div>
 
-      <form
-        onSubmit={onSubmitProduct}
-        className="bg-white border border-slate-200 rounded-lg p-6 space-y-4"
-      >
+      <PageGuide
+        title="Fastest way to keep this updated"
+        steps={[
+          "Use Add Product for one item at a time.",
+          "Use Excel import for bulk updates.",
+          "Archive products you no longer sell so AI stops mentioning them.",
+        ]}
+      />
+
+      {error ? <div className="status-banner error">{error}</div> : null}
+      {message ? <div className="status-banner success">{message}</div> : null}
+
+      <form onSubmit={onSubmitProduct} className="panel-card space-y-4">
         <h3 className="font-semibold text-slate-900">Add Product</h3>
         <div className="grid md:grid-cols-2 gap-4">
-          <input
-            className="border border-slate-300 rounded px-3 py-2 text-sm"
-            placeholder="Product name"
-            value={form.name}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, name: e.target.value }))
-            }
-            required
-          />
-          <input
-            className="border border-slate-300 rounded px-3 py-2 text-sm"
-            placeholder="SKU (optional)"
-            value={form.sku}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, sku: e.target.value }))
-            }
-          />
-          <input
-            className="border border-slate-300 rounded px-3 py-2 text-sm"
-            placeholder="Category"
-            value={form.category}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, category: e.target.value }))
-            }
-          />
-          <div className="flex gap-2">
+          <div>
+            <label className="field-label">Product Name</label>
             <input
-              type="number"
-              step="0.01"
-              className="border border-slate-300 rounded px-3 py-2 text-sm w-full"
-              placeholder="Price"
-              value={form.price}
+              className="field-input"
+              placeholder="Product name"
+              value={form.name}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, price: e.target.value }))
+                setForm((prev) => ({ ...prev, name: e.target.value }))
               }
               required
             />
+          </div>
+          <div>
+            <label className="field-label">SKU (Optional)</label>
             <input
-              className="border border-slate-300 rounded px-3 py-2 text-sm w-24"
-              placeholder="NGN"
-              value={form.currency}
+              className="field-input"
+              placeholder="SKU"
+              value={form.sku}
               onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  currency: e.target.value.toUpperCase(),
-                }))
+                setForm((prev) => ({ ...prev, sku: e.target.value }))
               }
             />
           </div>
+          <div>
+            <label className="field-label">Category</label>
+            <input
+              className="field-input"
+              placeholder="Category"
+              value={form.category}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, category: e.target.value }))
+              }
+            />
+            <FieldHint>Optional but useful for better AI grouping.</FieldHint>
+          </div>
+          <div>
+            <label className="field-label">Price and Currency</label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                step="0.01"
+                className="field-input w-full"
+                placeholder="Price"
+                value={form.price}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, price: e.target.value }))
+                }
+                required
+              />
+              <input
+                className="field-input w-24"
+                placeholder="NGN"
+                value={form.currency}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    currency: e.target.value.toUpperCase(),
+                  }))
+                }
+              />
+            </div>
+          </div>
         </div>
-        <textarea
-          className="border border-slate-300 rounded px-3 py-2 text-sm w-full"
-          placeholder="Description"
-          rows={3}
-          value={form.description}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, description: e.target.value }))
-          }
-        />
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
+        <div>
+          <label className="field-label">Description</label>
+          <textarea
+            className="field-input"
+            placeholder="Description"
+            rows={3}
+            value={form.description}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, description: e.target.value }))
+            }
+          />
+        </div>
+        <button type="submit" disabled={isSaving} className="primary-button">
           {isSaving ? "Saving..." : "Add Product"}
         </button>
       </form>
 
-      <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-3">
+      <div className="panel-card space-y-3">
         <h3 className="font-semibold text-slate-900">Import from Excel</h3>
         <p className="text-xs text-slate-600">
-          Required columns: Name, Price. Optional: Description, Category, SKU,
-          Currency, Active.
+          Required columns: Name and Price. Optional: Description, Category,
+          SKU, Currency, Active.
         </p>
         <input
           type="file"
@@ -260,7 +295,7 @@ const ProductCatalog = () => {
         <button
           type="button"
           onClick={onUploadExcel}
-          className="bg-slate-900 text-white px-4 py-2 rounded hover:bg-slate-700"
+          className="secondary-button"
         >
           Import Excel File
         </button>
@@ -269,12 +304,12 @@ const ProductCatalog = () => {
         ) : null}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg p-6">
+      <div className="panel-card">
         <h3 className="font-semibold text-slate-900 mb-4">Current Products</h3>
         {isLoading ? (
-          <p className="text-slate-600 text-sm">Loading products...</p>
+          <p className="muted-text">Loading products...</p>
         ) : sortedProducts.length === 0 ? (
-          <p className="text-slate-600 text-sm">No active products yet.</p>
+          <p className="muted-text">No active products yet.</p>
         ) : (
           <div className="space-y-2">
             {sortedProducts.map((product) => (
@@ -307,7 +342,7 @@ const ProductCatalog = () => {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 

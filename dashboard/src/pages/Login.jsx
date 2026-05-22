@@ -1,5 +1,7 @@
 import React, { useState, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
+import FieldHint from "../components/ui/FieldHint";
 
 const Login = () => {
   const { login, isLoading } = useContext(AuthContext);
@@ -27,7 +29,16 @@ const Login = () => {
           Access your customer operations workspace.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <PageGuide
+          title="Quick login steps"
+          steps={[
+            "Enter the same email used during signup.",
+            "Use your admin password to continue.",
+            "If login fails, check spelling before retrying.",
+          ]}
+        />
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="field-label">Email Address</label>
             <input
@@ -39,6 +50,7 @@ const Login = () => {
               autoComplete="username"
               required
             />
+            <FieldHint>Use a valid work email you can access.</FieldHint>
           </div>
 
           <div>
@@ -52,6 +64,7 @@ const Login = () => {
               autoComplete="current-password"
               required
             />
+            <FieldHint>Password is case-sensitive.</FieldHint>
           </div>
 
           {error && (

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
+import { apiUrl } from "../services/apiBase.js";
 
 const TenantManagement = () => {
   const { token } = useContext(AuthContext);
@@ -10,12 +12,9 @@ const TenantManagement = () => {
     const fetchBusinesses = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/superadmin/tenants`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const response = await fetch(apiUrl("/api/superadmin/tenants"), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         if (!response.ok) throw new Error("Failed to fetch tenants");
         const data = await response.json();
@@ -40,6 +39,15 @@ const TenantManagement = () => {
           View and manage all registered businesses.
         </p>
       </div>
+
+      <PageGuide
+        title="Status meanings"
+        steps={[
+          "Live: onboarding complete and tenant is active.",
+          "Onboarding: setup is still in progress.",
+          "Paused: bot is intentionally stopped in switchboard.",
+        ]}
+      />
 
       {isLoading ? (
         <p className="text-slate-600">Loading tenants...</p>

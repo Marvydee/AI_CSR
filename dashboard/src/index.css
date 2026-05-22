@@ -318,6 +318,58 @@ body {
   gap: 0.6rem;
 }
 
+.ux-guide {
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #f5f9ff 0%, #eef8ff 100%);
+  padding: 0.9rem 1rem;
+}
+
+.ux-guide-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.ux-guide-description {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.ux-guide-steps {
+  margin: 0.55rem 0 0;
+  padding-left: 1rem;
+  color: #334155;
+  font-size: 0.83rem;
+}
+
+.ux-guide-steps li + li {
+  margin-top: 0.2rem;
+}
+
+.field-hint {
+  margin: 0.34rem 0 0;
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.tab-meta {
+  margin-top: 0.12rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.section-intro {
+  margin-bottom: 1rem;
+}
+
+.mobile-tab-select {
+  width: 100%;
+  margin-top: 0.85rem;
+}
+
 .review-grid {
   display: grid;
   gap: 1rem;
@@ -431,5 +483,9 @@ body {
   .sidebar-item {
     flex: 1 1 100%;
     justify-content: flex-start;
+  }
+
+  .tab-meta {
+    display: none;
   }
 }

@@ -10,6 +10,7 @@ import ServicesCatalog from "./ServicesCatalog";
 import DraftReview from "./DraftReview";
 import AccountSettings from "./AccountSettings";
 import AppIcon from "../components/AppIcon";
+import PageGuide from "../components/ui/PageGuide";
 
 const AdminDashboard = () => {
   const { user, logout } = useContext(AuthContext);
@@ -26,16 +27,64 @@ const AdminDashboard = () => {
   }
 
   const tabs = [
-    { id: "inbox", label: "Live Inbox", icon: "inbox" },
-    { id: "drafts", label: "Draft Review", icon: "edit" },
-    { id: "handoffs", label: "Handoff Alerts", icon: "alarm" },
-    { id: "toggles", label: "Trust Center", icon: "shield" },
-    { id: "products", label: "Products", icon: "box" },
-    { id: "services", label: "Services", icon: "wrench" },
-    { id: "profile", label: "Business Profile", icon: "building" },
-    { id: "account", label: "Account Settings", icon: "user" },
-    { id: "training", label: "AI Training", icon: "cpu" },
+    {
+      id: "inbox",
+      label: "Live Inbox",
+      icon: "inbox",
+      description: "Track customer conversations in real time.",
+    },
+    {
+      id: "drafts",
+      label: "Draft Review",
+      icon: "edit",
+      description: "Approve or edit AI responses before sending.",
+    },
+    {
+      id: "handoffs",
+      label: "Handoff Alerts",
+      icon: "alarm",
+      description: "Handle chats that need human attention now.",
+    },
+    {
+      id: "toggles",
+      label: "Trust Center",
+      icon: "shield",
+      description: "Control how much autonomy AI has per task.",
+    },
+    {
+      id: "products",
+      label: "Products",
+      icon: "box",
+      description: "Add products so AI can quote accurate details.",
+    },
+    {
+      id: "services",
+      label: "Services",
+      icon: "wrench",
+      description: "List services and baseline pricing.",
+    },
+    {
+      id: "profile",
+      label: "Business Profile",
+      icon: "building",
+      description: "Keep company and payout data up to date.",
+    },
+    {
+      id: "account",
+      label: "Account Settings",
+      icon: "user",
+      description: "Manage your login identity and password.",
+    },
+    {
+      id: "training",
+      label: "AI Training",
+      icon: "cpu",
+      description: "Teach AI about your business and follow-up style.",
+    },
   ];
+
+  const activeTabConfig =
+    tabs.find((tab) => tab.id === activeTab) || tabs[0] || null;
 
   return (
     <div className="page-shell">
@@ -74,6 +123,40 @@ const AdminDashboard = () => {
 
         <main className="content-card">
           <div className="p-4 md:p-8">
+            {activeTabConfig ? (
+              <div className="section-intro space-y-3">
+                <div className="section-heading">
+                  <h2>{activeTabConfig.label}</h2>
+                  <p>{activeTabConfig.description}</p>
+                </div>
+
+                <PageGuide
+                  title="How to use this section"
+                  description="Use these quick steps to complete tasks faster and avoid mistakes."
+                  steps={[
+                    "Open the tab that matches what you want to do.",
+                    "Fill only the required fields first, then add optional details.",
+                    "Save changes and check banners for success or error feedback.",
+                  ]}
+                />
+
+                <label className="field-label mobile-tab-select">
+                  Quick navigation on mobile
+                </label>
+                <select
+                  className="field-input"
+                  value={activeTab}
+                  onChange={(event) => setActiveTab(event.target.value)}
+                >
+                  {tabs.map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      {tab.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
             {activeTab === "inbox" && <LiveInbox />}
             {activeTab === "drafts" && <DraftReview />}
             {activeTab === "toggles" && <TrustCenter />}

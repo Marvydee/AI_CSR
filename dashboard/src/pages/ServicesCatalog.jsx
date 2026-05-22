@@ -1,5 +1,7 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
+import { apiUrl } from "../services/apiBase.js";
 
 const defaultForm = {
   name: "",
@@ -14,6 +16,8 @@ const ServicesCatalog = () => {
   const [form, setForm] = useState(defaultForm);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const businessId = user?.businessId;
 
   const sortedServices = useMemo(
@@ -30,7 +34,7 @@ const ServicesCatalog = () => {
     setIsLoading(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${businessId}/services`,
+        apiUrl(`/api/business/${businessId}/services`),
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -39,8 +43,9 @@ const ServicesCatalog = () => {
       if (!response.ok) throw new Error("Failed to fetch services");
       const payload = await response.json();
       setServices(Array.isArray(payload) ? payload : []);
-    } catch (error) {
-      console.error("[ServicesCatalog] Fetch error", error.message);
+    } catch (fetchError) {
+      console.error("[ServicesCatalog] Fetch error", fetchError.message);
+      setError(fetchError.message || "Could not fetch services");
     } finally {
       setIsLoading(false);
     }
@@ -56,14 +61,16 @@ const ServicesCatalog = () => {
 
     const numericPrice = Number(form.basePrice);
     if (!Number.isFinite(numericPrice) || numericPrice < 0) {
-      alert("Enter a valid base price");
+      setError("Enter a valid base price.");
       return;
     }
 
     setIsSaving(true);
+    setError("");
+    setMessage("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${businessId}/services`,
+        apiUrl(`/api/business/${businessId}/services`),
         {
           method: "POST",
           headers: {
@@ -85,10 +92,11 @@ const ServicesCatalog = () => {
       }
 
       setForm(defaultForm);
+      setMessage("Service added successfully.");
       await fetchServices();
-    } catch (error) {
-      console.error("[ServicesCatalog] Save error", error.message);
-      alert(error.message || "Could not save service");
+    } catch (saveError) {
+      console.error("[ServicesCatalog] Save error", saveError.message);
+      setError(saveError.message || "Could not save service");
     } finally {
       setIsSaving(false);
     }
@@ -97,9 +105,11 @@ const ServicesCatalog = () => {
   const onArchiveService = async (serviceId) => {
     if (!businessId || !token) return;
 
+    setError("");
+    setMessage("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/business/${businessId}/services/${serviceId}`,
+        apiUrl(`/api/business/${businessId}/services/${serviceId}`),
         {
           method: "DELETE",
           headers: {
@@ -109,88 +119,101 @@ const ServicesCatalog = () => {
       );
 
       if (!response.ok) throw new Error("Failed to remove service");
+      setMessage("Service removed.");
       await fetchServices();
-    } catch (error) {
-      console.error("[ServicesCatalog] Delete error", error.message);
-      alert("Could not remove service");
+    } catch (deleteError) {
+      console.error("[ServicesCatalog] Delete error", deleteError.message);
+      setError(deleteError.message || "Could not remove service");
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-900">
-          Services Catalog
-        </h2>
-        <p className="text-sm text-slate-600">
-          Add your business services with base pricing so the AI can answer
-          service requests clearly.
+    <section className="space-y-6">
+      <div className="section-heading">
+        <h2>Services Catalog</h2>
+        <p>
+          Add service offers and base prices so AI can quote your services
+          clearly.
         </p>
       </div>
 
-      <form
-        onSubmit={onSubmitService}
-        className="bg-white border border-slate-200 rounded-lg p-6 space-y-4"
-      >
+      <PageGuide
+        title="Simple setup"
+        steps={[
+          "Add each service with a clear name.",
+          "Set a realistic base price and currency.",
+          "Remove old services to keep AI suggestions accurate.",
+        ]}
+      />
+
+      {error ? <div className="status-banner error">{error}</div> : null}
+      {message ? <div className="status-banner success">{message}</div> : null}
+
+      <form onSubmit={onSubmitService} className="panel-card space-y-4">
         <h3 className="font-semibold text-slate-900">Add Service</h3>
         <div className="grid md:grid-cols-2 gap-4">
-          <input
-            className="border border-slate-300 rounded px-3 py-2 text-sm"
-            placeholder="Service name"
-            value={form.name}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, name: e.target.value }))
-            }
-            required
-          />
-          <div className="flex gap-2">
+          <div>
+            <label className="field-label">Service Name</label>
             <input
-              type="number"
-              step="0.01"
-              className="border border-slate-300 rounded px-3 py-2 text-sm w-full"
-              placeholder="Base price"
-              value={form.basePrice}
+              className="field-input"
+              placeholder="Service name"
+              value={form.name}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, basePrice: e.target.value }))
+                setForm((prev) => ({ ...prev, name: e.target.value }))
               }
               required
             />
-            <input
-              className="border border-slate-300 rounded px-3 py-2 text-sm w-24"
-              value={form.currency}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  currency: e.target.value.toUpperCase(),
-                }))
-              }
-            />
+          </div>
+          <div>
+            <label className="field-label">Base Price and Currency</label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                step="0.01"
+                className="field-input w-full"
+                placeholder="Base price"
+                value={form.basePrice}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, basePrice: e.target.value }))
+                }
+                required
+              />
+              <input
+                className="field-input w-24"
+                value={form.currency}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    currency: e.target.value.toUpperCase(),
+                  }))
+                }
+              />
+            </div>
           </div>
         </div>
-        <textarea
-          className="border border-slate-300 rounded px-3 py-2 text-sm w-full"
-          rows={3}
-          placeholder="Service description"
-          value={form.description}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, description: e.target.value }))
-          }
-        />
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
+        <div>
+          <label className="field-label">Service Description</label>
+          <textarea
+            className="field-input"
+            rows={3}
+            placeholder="Service description"
+            value={form.description}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, description: e.target.value }))
+            }
+          />
+        </div>
+        <button type="submit" disabled={isSaving} className="primary-button">
           {isSaving ? "Saving..." : "Add Service"}
         </button>
       </form>
 
-      <div className="bg-white border border-slate-200 rounded-lg p-6">
+      <div className="panel-card">
         <h3 className="font-semibold text-slate-900 mb-4">Current Services</h3>
         {isLoading ? (
-          <p className="text-slate-600 text-sm">Loading services...</p>
+          <p className="muted-text">Loading services...</p>
         ) : sortedServices.length === 0 ? (
-          <p className="text-slate-600 text-sm">No services yet.</p>
+          <p className="muted-text">No services yet.</p>
         ) : (
           <div className="space-y-2">
             {sortedServices.map((service) => (
@@ -222,7 +245,7 @@ const ServicesCatalog = () => {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 

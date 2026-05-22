@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PageGuide from "../components/ui/PageGuide";
+import { apiUrl } from "../services/apiBase.js";
 
 const HandoffAlerts = () => {
   const { token, user } = useContext(AuthContext);
@@ -53,7 +55,7 @@ const HandoffAlerts = () => {
       setIsLoading(true);
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/business/handoffs?businessId=${user?.businessId || ""}`,
+          apiUrl(`/api/business/handoffs?businessId=${user?.businessId || ""}`),
           {
             headers: { Authorization: `Bearer ${token}` },
           },
@@ -94,6 +96,15 @@ const HandoffAlerts = () => {
         Chats that need your immediate attention (customer asked for human or
         toggle requires handoff).
       </p>
+
+      <PageGuide
+        title="Response priority"
+        steps={[
+          "Open newest alerts first to reduce waiting time.",
+          "Use Reply to continue the conversation manually.",
+          "Adjust trust center toggles if handoffs become too frequent.",
+        ]}
+      />
 
       {isLoading ? (
         <p className="text-slate-600">Loading handoffs...</p>
