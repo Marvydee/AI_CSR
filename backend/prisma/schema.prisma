@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   engineType    = "binary"
   binaryTargets = ["native", "windows", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
 }
@@ -35,96 +35,114 @@ enum SubscriptionStatus {
 }
 
 model SuperAdmin {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String
-  name          String
-  lastLoginAt   DateTime?
+  id                 String                   @id @default(cuid())
+  email              String                   @unique
+  passwordHash       String
+  name               String
+  lastLoginAt        DateTime?
   inviteCodesCreated RegistrationInviteCode[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
 
   @@index([email])
 }
 
 model Business {
-  id                    String                @id @default(cuid())
-  name                  String
-  email                 String?               @unique
-  whatsappPhoneNumberId String                @unique
+  id                     String                  @id @default(cuid())
+  name                   String
+  email                  String?                 @unique
+  whatsappPhoneNumberId  String                  @unique
   whatsappBusinessNumber String?
-  metaAppId             String?
-  apiKey                String                @unique @default(cuid())
-  customSystemPrompt    String?               @db.Text
-  subscriptionStatus    SubscriptionStatus    @default(ACTIVE)
-  isPaused              Boolean               @default(false)
-  aiTrainingData        Json?
-  admins                BusinessAdmin[]
-  controlToggles        ControlToggles?
-  customers             Customer[]
-  conversations         Conversation[]
-  products              Product[]
-  platformMetrics       PlatformMetric[]
-  inviteCodeUsed        RegistrationInviteCode?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  metaAppId              String?
+  apiKey                 String                  @unique @default(cuid())
+  customSystemPrompt     String?                 @db.Text
+  subscriptionStatus     SubscriptionStatus      @default(ACTIVE)
+  isPaused               Boolean                 @default(false)
+  aiTrainingData         Json?
+  admins                 BusinessAdmin[]
+  controlToggles         ControlToggles?
+  customers              Customer[]
+  conversations          Conversation[]
+  products               Product[]
+  platformMetrics        PlatformMetric[]
+  inviteCodeUsed         RegistrationInviteCode?
+  // New relations for extended features
+  orders                 Order[]
+  invoices               Invoice[]
+  paymentReminders       PaymentReminder[]
+  voiceNotes             VoiceNote[]
+  customerMemories       CustomerMemory[]
+  aiProviderConfigs      AIProviderConfig[]
+  subscriptions          Subscription[]
+  conversationAnalytics  ConversationAnalytics[]
+  dailyAnalytics         DailyAnalytics[]
+  languagePreferences    LanguagePreference[]
+  aiUsageLogs            AIUsageLog[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@index([name, subscriptionStatus])
 }
 
 model RegistrationInviteCode {
-  id                    String      @id @default(cuid())
-  code                  String      @unique
+  id                    String     @id @default(cuid())
+  code                  String     @unique
   createdBySuperAdminId String
-  usedByBusinessId      String?     @unique
+  usedByBusinessId      String?    @unique
   usedByAdminEmail      String?
   usedAt                DateTime?
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
-  createdBySuperAdmin   SuperAdmin  @relation(fields: [createdBySuperAdminId], references: [id], onDelete: Restrict)
-  usedByBusiness        Business?   @relation(fields: [usedByBusinessId], references: [id], onDelete: SetNull)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  createdBySuperAdmin   SuperAdmin @relation(fields: [createdBySuperAdminId], references: [id], onDelete: Restrict)
+  usedByBusiness        Business?  @relation(fields: [usedByBusinessId], references: [id], onDelete: SetNull)
 
   @@index([usedAt, createdAt])
 }
 
 model BusinessAdmin {
-  id         String   @id @default(cuid())
-  businessId String
-  email      String
+  id           String   @id @default(cuid())
+  businessId   String
+  email        String
   passwordHash String
-  name       String
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  name         String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@unique([businessId, email])
   @@index([businessId])
 }
 
 model ControlToggles {
-  id                         String      @id @default(cuid())
-  businessId                 String      @unique
-  togglePaymentDetails       ToggleMode  @default(AI_ASK)
-  togglePriceQuotes          ToggleMode  @default(AI_ASK)
-  toggleBookingConfirmation  ToggleMode  @default(AI_ASK)
-  toggleFirstCustomerMessage ToggleMode  @default(AI_ASK)
-  business                   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id                         String     @id @default(cuid())
+  businessId                 String     @unique
+  togglePaymentDetails       ToggleMode @default(AI_ASK)
+  togglePriceQuotes          ToggleMode @default(AI_ASK)
+  toggleBookingConfirmation  ToggleMode @default(AI_ASK)
+  toggleFirstCustomerMessage ToggleMode @default(AI_ASK)
+  business                   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
   updatedBy                  String?
-  updatedAt                  DateTime    @updatedAt
+  updatedAt                  DateTime   @updatedAt
 
   @@index([businessId])
 }
 
 model Customer {
-  id            String          @id @default(cuid())
-  businessId    String
-  waId          String
-  name          String?
-  phoneNumber   String?
-  conversations Conversation[]
-  business      Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id                  String               @id @default(cuid())
+  businessId          String
+  waId                String
+  name                String?
+  phoneNumber         String?
+  conversations       Conversation[]
+  // New relations for extended features
+  orders              Order[]
+  invoices            Invoice[]
+  voiceNotes          VoiceNote[]
+  customerMemory      CustomerMemory?
+  languagePreferences LanguagePreference[]
+  business            Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@unique([businessId, waId])
   @@index([businessId, waId])
@@ -152,30 +170,30 @@ model Conversation {
 }
 
 model Message {
-  id             String           @id @default(cuid())
-  conversationId String
-  direction      MessageDirection
-  body           String           @db.VarChar(2000)
-  metaMessageId  String?          @unique
-  needsApproval  Boolean          @default(false)
-  approvalSeenAt DateTime?
+  id              String           @id @default(cuid())
+  conversationId  String
+  direction       MessageDirection
+  body            String           @db.VarChar(2000)
+  metaMessageId   String?          @unique
+  needsApproval   Boolean          @default(false)
+  approvalSeenAt  DateTime?
   rejectionReason String?
-  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime         @default(now())
+  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt       DateTime         @default(now())
 
   @@index([conversationId, createdAt])
 }
 
 model PlatformMetric {
-  id              String   @id @default(cuid())
-  businessId      String
-  groqRequestsCount Int     @default(0)
-  metaWebhooksCount Int     @default(0)
-  averageReplyTime Float   @default(0)
-  messagesProcessed Int    @default(0)
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                String   @id @default(cuid())
+  businessId        String
+  groqRequestsCount Int      @default(0)
+  metaWebhooksCount Int      @default(0)
+  averageReplyTime  Float    @default(0)
+  messagesProcessed Int      @default(0)
+  business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@unique([businessId])
   @@index([businessId])
@@ -195,8 +213,382 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([businessId, isActive])
-  @@index([businessId, category])
   @@unique([businessId, name])
   @@unique([businessId, sku])
+  @@index([businessId, isActive])
+  @@index([businessId, category])
+}
+
+// ============================================================================
+// BILLING & CREDITS SYSTEM
+// ============================================================================
+
+enum PricingPlanType {
+  FREE
+  PRO
+  BUSINESS
+}
+
+enum AIProviderType {
+  LLAMA
+  GEMINI_FLASH
+  GPT_4O_MINI
+  CLAUDE_SONNET
+}
+
+enum CreditsTaskType {
+  TEXT_MESSAGE
+  VOICE_TRANSCRIPTION
+  IMAGE_ANALYSIS
+  INVOICE_GENERATION
+  ORDER_SUMMARY
+  PAYMENT_REMINDER
+}
+
+model PricingPlan {
+  id                 String          @id @default(cuid())
+  planType           PricingPlanType @unique
+  name               String          @unique
+  description        String?         @db.Text
+  monthlyAICredits   Int // Total AI credits per month
+  monthlyPrice       Decimal         @db.Decimal(12, 2)
+  supportedProviders String          @default("LLAMA") // JSON array: ["LLAMA","GEMINI_FLASH"]
+  features           String          @db.Text // JSON array of feature flags
+  maxTeamMembers     Int             @default(1)
+  voiceNoteSupport   Boolean         @default(false)
+  invoiceGeneration  Boolean         @default(false)
+  advancedAnalytics  Boolean         @default(false)
+  subscriptions      Subscription[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([planType])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  businessId           String             @unique
+  planId               String
+  status               SubscriptionStatus
+  currentMonthStart    DateTime
+  currentMonthEnd      DateTime
+  creditsRemaining     Int
+  creditsUsedThisMonth Int                @default(0)
+  nextBillingDate      DateTime?
+  paymentMethodId      String? // For future payment integration
+  autoRenew            Boolean            @default(true)
+  business             Business?          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  plan                 PricingPlan        @relation(fields: [planId], references: [id], onDelete: Restrict)
+  creditLogs           CreditLog[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([status, nextBillingDate])
+  @@index([businessId])
+}
+
+model CreditLog {
+  id              String          @id @default(cuid())
+  subscriptionId  String
+  taskType        CreditsTaskType
+  creditsDeducted Int
+  description     String?
+  relatedEntityId String? // Order ID, Invoice ID, etc.
+  subscription    Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  createdAt       DateTime        @default(now())
+
+  @@index([subscriptionId, createdAt])
+  @@index([relatedEntityId])
+}
+
+// ============================================================================
+// ORDER TAKING & INVOICING SYSTEM
+// ============================================================================
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  businessId     String
+  customerId     String
+  conversationId String?
+  items          String      @db.Text // JSON array of {productId, quantity, price}
+  totalAmount    Decimal     @db.Decimal(12, 2)
+  currency       String      @default("NGN") @db.VarChar(8)
+  status         OrderStatus @default(PENDING)
+  aiSummary      String?     @db.Text // AI-generated order summary
+  notes          String?     @db.Text
+  invoice        Invoice?    @relation("OrderToInvoice")
+  business       Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer       Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([businessId, status])
+  @@index([customerId, businessId])
+  @@index([conversationId])
+}
+
+model Invoice {
+  id            String            @id @default(cuid())
+  businessId    String
+  customerId    String
+  orderId       String            @unique
+  invoiceNumber String            @unique
+  status        InvoiceStatus     @default(DRAFT)
+  amount        Decimal           @db.Decimal(12, 2)
+  currency      String            @default("NGN") @db.VarChar(8)
+  dueDate       DateTime
+  issueDate     DateTime          @default(now())
+  paidDate      DateTime?
+  notes         String?           @db.Text
+  itemsDetails  String            @db.Text // JSON array of line items
+  order         Order             @relation("OrderToInvoice", fields: [orderId], references: [id], onDelete: Cascade)
+  business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer      Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  reminders     PaymentReminder[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([businessId, status])
+  @@index([customerId, dueDate])
+  @@index([status, dueDate])
+}
+
+// ============================================================================
+// PAYMENT REMINDER SYSTEM
+// ============================================================================
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  VIEWED
+  PAID_AFTER_REMINDER
+  OVERDUE
+}
+
+model PaymentReminder {
+  id              String         @id @default(cuid())
+  invoiceId       String
+  businessId      String
+  reminderNumber  Int            @default(1) // 1st, 2nd, 3rd reminder
+  status          ReminderStatus @default(PENDING)
+  scheduledFor    DateTime
+  sentAt          DateTime?
+  viewedAt        DateTime?
+  messageTemplate String?        @db.Text
+  invoice         Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([status, scheduledFor])
+  @@index([invoiceId])
+  @@index([businessId])
+}
+
+// ============================================================================
+// VOICE PROCESSING & ATTACHMENTS
+// ============================================================================
+
+enum VoiceNoteStatus {
+  UPLOADED
+  TRANSCRIBING
+  TRANSCRIBED
+  TRANSCRIPTION_FAILED
+}
+
+model VoiceNote {
+  id                 String          @id @default(cuid())
+  messageId          String?
+  businessId         String
+  customerId         String
+  waMediaId          String          @unique
+  status             VoiceNoteStatus @default(UPLOADED)
+  transcription      String?         @db.Text
+  transcriptionError String?
+  summary            String?         @db.Text // AI-generated summary
+  duration           Int? // Duration in seconds
+  language           String          @default("en")
+  business           Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer           Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([businessId, status])
+  @@index([customerId])
+  @@index([messageId])
+}
+
+// ============================================================================
+// CUSTOMER MEMORY & PREFERENCES
+// ============================================================================
+
+model CustomerMemory {
+  id                  String    @id @default(cuid())
+  businessId          String
+  customerId          String    @unique
+  preferences         String    @db.Text // JSON: {language, preferredContactTime, timezone}
+  orderHistory        String?   @db.Text // JSON array of recent orders
+  conversationSummary String?   @db.Text // AI-generated summary of interaction patterns
+  isRepeatCustomer    Boolean   @default(false)
+  estimatedLTV        Decimal?  @db.Decimal(12, 2) // Lifetime value
+  segmentationTags    String? // JSON array: ["vip", "dormant", "high-value"]
+  lastInteractionAt   DateTime?
+  business            Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer            Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([businessId, customerId])
+  @@index([businessId])
+}
+
+// ============================================================================
+// AI PROVIDER CONFIGURATION & USAGE
+// ============================================================================
+
+model AIProviderConfig {
+  id            String         @id @default(cuid())
+  businessId    String
+  provider      AIProviderType
+  isEnabled     Boolean        @default(false)
+  apiKey        String? // Encrypted in production
+  customModel   String? // For future custom models
+  temperature   Float          @default(0.7)
+  maxTokens     Int            @default(1000)
+  priority      Int            @default(100) // Lower = higher priority in routing
+  fallbackOrder Int? // Order to try if primary fails
+  costPerToken  Decimal        @default(0) @db.Decimal(12, 6)
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  usageLogs     AIUsageLog[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([businessId, provider])
+  @@index([businessId, isEnabled])
+}
+
+model AIUsageLog {
+  id               String           @id @default(cuid())
+  businessId       String
+  providerConfigId String
+  taskType         CreditsTaskType
+  inputTokens      Int
+  outputTokens     Int
+  totalCost        Decimal          @db.Decimal(12, 6)
+  responseTimeMs   Int
+  success          Boolean          @default(true)
+  errorMessage     String?
+  relatedEntityId  String?
+  providerConfig   AIProviderConfig @relation(fields: [providerConfigId], references: [id], onDelete: Cascade)
+  business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt        DateTime         @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([providerConfigId])
+  @@index([taskType])
+}
+
+// ============================================================================
+// ANALYTICS & METRICS
+// ============================================================================
+
+model ConversationAnalytics {
+  id                   String   @id @default(cuid())
+  businessId           String
+  customerId           String?
+  totalMessages        Int      @default(0)
+  aiMessages           Int      @default(0)
+  humanMessages        Int      @default(0)
+  averageResponseTime  Float    @default(0) // milliseconds
+  customerSatisfaction Float? // For future feedback integration
+  handoffCount         Int      @default(0)
+  ordersCreated        Int      @default(0)
+  topicsSummary        String?  @db.Text // JSON: {topic: count}
+  period               String   @default("monthly") // daily, weekly, monthly
+  business             Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([period])
+}
+
+model DailyAnalytics {
+  id                String   @id @default(cuid())
+  businessId        String
+  date              DateTime
+  messagesReceived  Int      @default(0)
+  messagesSent      Int      @default(0)
+  ordersCreated     Int      @default(0)
+  invoicesGenerated Int      @default(0)
+  creditsUsed       Int      @default(0)
+  uniqueCustomers   Int      @default(0)
+  aiResponseSuccess Float    @default(100) // percentage
+  business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([businessId, date])
+  @@index([businessId, date])
+}
+
+// ============================================================================
+// MULTILINGUAL SUPPORT
+// ============================================================================
+
+enum LanguageCode {
+  // West Africa
+  en // English
+  pid // Nigerian Pidgin
+  yo // Yoruba (Nigeria)
+  ha // Hausa (Nigeria/Niger)
+  ig // Igbo (Nigeria)
+  tw // Akan/Twi (Ghana)
+  fr // French (Senegal, Côte d'Ivoire, DRC, etc.)
+
+  // East Africa
+  sw // Swahili (Kenya, Tanzania, Uganda)
+  am // Amharic (Ethiopia)
+  so // Somali (Somalia)
+
+  // Southern Africa
+  zu // Zulu (South Africa)
+  xh // Xhosa (South Africa)
+  af // Afrikaans (South Africa, Namibia)
+
+  // North Africa
+  ar // Arabic (Egypt, Algeria, Morocco, etc.)
+}
+
+model LanguagePreference {
+  id         String       @id @default(cuid())
+  businessId String
+  customerId String?
+  language   LanguageCode @default(en)
+  lastUsedAt DateTime?
+  business   Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer   Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([businessId, customerId])
+  @@index([businessId])
 }

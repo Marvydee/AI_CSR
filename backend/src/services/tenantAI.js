@@ -1,3 +1,5 @@
+import EXAMPLES from "./promptExamples.js";
+
 const TONE_MAP = {
   friendly: "friendly",
   professional: "professional",
@@ -376,6 +378,13 @@ export const buildDynamicSystemPrompt = ({
     "",
     "Business FAQs:",
     faqText,
+    "",
+    "Examples:",
+    ...EXAMPLES.flatMap(({ user, assistant }) => [
+      `User: ${user}`,
+      `Assistant: ${assistant}`,
+      "",
+    ]).slice(0, -1),
     "",
     "Tenant Memory Summary:",
     memorySummary,
