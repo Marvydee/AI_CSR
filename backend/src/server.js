@@ -14,18 +14,24 @@ dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
+const normalizeOrigin = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\/$/, "");
 const defaultAllowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ];
 const configuredAllowedOrigins = String(process.env.CORS_ORIGINS || "")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
 const allowedOrigins = new Set([
-  ...defaultAllowedOrigins,
+  ...defaultAllowedOrigins.map((origin) => normalizeOrigin(origin)),
   ...configuredAllowedOrigins,
 ]);
+
+console.info("[CORS] allowedOrigins:", Array.from(allowedOrigins).join(", "));
 
 // ngrok and similar tunnels send X-Forwarded-For, so trust one proxy by default.
 const trustProxyRaw = process.env.TRUST_PROXY;
@@ -45,11 +51,13 @@ if (typeof trustProxyRaw === "string") {
 
 app.use(helmet());
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
+  const origin = normalizeOrigin(req.headers.origin);
 
   if (origin && allowedOrigins.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
+  } else if (req.method === "OPTIONS") {
+    console.warn("[CORS] Preflight request from disallowed origin:", req.headers.origin);
   }
 
   res.setHeader(
