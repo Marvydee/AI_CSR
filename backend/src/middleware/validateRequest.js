@@ -185,7 +185,13 @@ export const validateRequest = (schema) => {
         message: d.message,
       }));
       console.warn("[Validation] Request validation failed", details);
-      return res.status(400).json({ error: "Validation failed", details });
+      const detailMessage = details
+        .map((detail) => `${detail.field}: ${detail.message}`)
+        .join(", ");
+      return res.status(400).json({
+        error: detailMessage ? `Validation failed - ${detailMessage}` : "Validation failed",
+        details,
+      });
     }
 
     req.validatedBody = value;
