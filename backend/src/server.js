@@ -18,6 +18,25 @@ const normalizeOrigin = (value) =>
   String(value || "")
     .trim()
     .replace(/\/$/, "");
+const addAllowedOrigin = (allowedOrigins, value) => {
+  const normalized = normalizeOrigin(value);
+  if (!normalized) return;
+
+  allowedOrigins.add(normalized);
+
+  try {
+    const parsedUrl = new URL(normalized);
+    if (
+      parsedUrl.protocol === "http:" &&
+      parsedUrl.hostname !== "localhost" &&
+      parsedUrl.hostname !== "127.0.0.1"
+    ) {
+      allowedOrigins.add(`https://${parsedUrl.host}`);
+    }
+  } catch {
+    // Ignore invalid origin strings; the normalized value is already added.
+  }
+};
 const defaultAllowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
@@ -26,10 +45,10 @@ const configuredAllowedOrigins = String(process.env.CORS_ORIGINS || "")
   .split(",")
   .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
-const allowedOrigins = new Set([
-  ...defaultAllowedOrigins.map((origin) => normalizeOrigin(origin)),
-  ...configuredAllowedOrigins,
-]);
+const allowedOrigins = new Set();
+
+defaultAllowedOrigins.forEach((origin) => addAllowedOrigin(allowedOrigins, origin));
+configuredAllowedOrigins.forEach((origin) => addAllowedOrigin(allowedOrigins, origin));
 
 console.info("[CORS] allowedOrigins:", Array.from(allowedOrigins).join(", "));
 
