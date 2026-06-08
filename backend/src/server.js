@@ -32,6 +32,8 @@ const allowedOrigins = new Set([
   ...configuredAllowedOrigins,
 ]);
 
+// Log allowed origins for diagnostics (helpful after deploy)
+console.info("[CORS] allowedOrigins:", Array.from(allowedOrigins).join(", "));
 // ngrok and similar tunnels send X-Forwarded-For, so trust one proxy by default.
 const trustProxyRaw = process.env.TRUST_PROXY;
 if (typeof trustProxyRaw === "string") {
@@ -55,6 +57,10 @@ app.use((req, res, next) => {
   if (origin && allowedOrigins.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
+  }
+  else if (req.method === "OPTIONS") {
+    // Log when OPTIONS requests come from disallowed origins to aid debugging
+    console.warn("[CORS] Preflight request from disallowed origin:", req.headers.origin);
   }
 
   res.setHeader(
